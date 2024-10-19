@@ -1,0 +1,92 @@
+[
+  {
+    "name": "_session",
+    "value": "d57f6cb10e3da4cbb214590a9f51ff7f",
+    "domain": "www.printful.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "dsr_setting",
+    "value": "68e9dd40de437b99d597a81543fa699a9744b73c93bca2e82f45828f1cb9b189a%3A2%3A%7Bi%3A0%3Bs%3A11%3A%22dsr_setting%22%3Bi%3A1%3Bs%3A31%3A%22%7B%22region%22%3A1%2C%22requirement%22%3Anull%7D%22%3B%7D",
+    "domain": ".printful.com",
+    "path": "/",
+    "expires": 1731959278.536088,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_pf_c",
+    "value": "3c172280e85f99c22149fb3c27a77e1d11cd658586a6c294ce041a9a07f8656fa%3A2%3A%7Bi%3A0%3Bs%3A5%3A%22_pf_c%22%3Bi%3A1%3Bs%3A32%3A%22bM7t6ErHrHqUTLebhbGOYkRWX3MtBaZI%22%3B%7D",
+    "domain": ".printful.com",
+    "path": "/",
+    "expires": 1729885676.32697,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_pf_ab_visitor_id",
+    "value": "d3d3de452141b950773a5ce5295e05a6accab4c3d2c6f2aaef16a2f3b1a0d99ba%3A2%3A%7Bi%3A0%3Bs%3A17%3A%22_pf_ab_visitor_id%22%3Bi%3A1%3Bs%3A64%3A%227acf07e8401590e805015600b552fe7fDivCAMUTwUqnNFZvFlepQdY0FEoJMqXZ%22%3B%7D",
+    "domain": ".printful.com",
+    "path": "/",
+    "expires": 1760816876.326985,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_csrf",
+    "value": "2c243bc368c1c6ce8c221fdaccf458a3fd9940f0cbafb4060963424a85ec4a4ba%3A2%3A%7Bi%3A0%3Bs%3A5%3A%22_csrf%22%3Bi%3A1%3Bs%3A32%3A%22c23uNqNhxvz5MiPBW3RWjRRwOW-f_Tv4%22%3B%7D",
+    "domain": "www.printful.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "display_currency",
+    "value": "7fbad2932be99034be751a5c8fdfa9706973eac897e1b43b25391330877f42e7a%3A2%3A%7Bi%3A0%3Bs%3A16%3A%22display_currency%22%3Bi%3A1%3Bs%3A3%3A%22USD%22%3B%7D",
+    "domain": ".printful.com",
+    "path": "/",
+    "expires": 1760816877.327009,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "__cf_bm",
+    "value": "N7W.QMplk2Fut.t6A3pu.Wy3ehZVtIW_hvp8rFuXjK0-1729280877-1.0.1.1-0cqte3qoyShu5mS0C0NkcqPacRAbHj75nr3SYUw7C6VCQs7MIoUGRICW.qJDW8FXTN.NlnikiaSffbTp44nFLA",
+    "domain": ".printful.com",
+    "path": "/",
+    "expires": 1729282677.327023,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "cf_clearance",
+    "value": "bIfhUaUceQ4_lmpgLu8wT3LpqRFFpKj60Ps55c9JVqg-1729280878-1.2.1.1-QvrBgPxj8JOSHks5LrhNJGyZbgCPW1jithgu7VehxWnfQEwnTKRuAvWVZ.sn0RIMga1qszw5tcqQaNA5MGyMrYl_0kQJe8z7WXRwfF3GeybB_5VE0Cp5Trzu3Mc2l9b44vWJIvn.TrqHlfs1cf0g7zaObz8p2h4MwylefHHf9Wqd8um.USztIsZWWJnB2Ha7Irj19TwarAQpm4CrhS9TOway9vFey_6NXFwUzI6kPdqd.PWW3oBzHHAaGsQFj.79TUaf5m6iWq6MwB3nbe3hWzD3JduJ0yRy8kLZl5e1p35w6dxR5wAkAe2ZJPgy4MWI61YgRXVCJ2ssKMzAp5X95b8IGoTTz6pcmnqIs_tO16qW.Jh1aXkWQl2YA1KKoaFgfJ4IOph.lol_NykbYiNZ5g",
+    "domain": ".printful.com",
+    "path": "/",
+    "expires": 1760816878.50486,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_pf_403_reload",
+    "value": "1",
+    "domain": "www.printful.com",
+    "path": "/",
+    "expires": 1729280939.178074,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  }
+]
