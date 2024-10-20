@@ -1,6 +1,6 @@
+const { connect } = require("puppeteer-real-browser")
 const express = require('express');
 const cors = require('cors');
-const { chromium } = require('playwright');
 
 const app = express();
 const port = 3001;
@@ -9,56 +9,57 @@ const port = 3001;
 app.use(cors());
 app.use(express.json());
 
-async function scrapeData() {
-    const browser = await chromium.launch({ headless: false, slowMo: 10 });
-    
-    // Create a new browser context with a specific user agent
-    const context = await browser.newContext({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+async function test(email, password) {
+    const { browser, page } = await connect({
+        headless: false,
+        args: [],
+        customConfig: {},
+        turnstile: true,
+        connectOption: {},
+        disableXvfb: false,
+        ignoreAllFlags: false,
+        plugins: [
+            require('puppeteer-extra-plugin-click-and-wait')()
+        ]
     });
 
-    const newPage = await context.newPage();
+    // Set viewport to full size
+    const dimensions = {
+        width: 1920, // Set width to 1920px or any desired width
+        height: 1080 // Set height to 1080px or any desired height
+    };
+    await page.setViewport(dimensions);
 
-    // Navigate to the login page
-    await newPage.goto('https://www.printful.com/auth/login');
-    console.log("Navigated to login page");
+    await page.goto('https://www.printful.com/auth/login');
+    await page.waitForSelector('#login-email'); // Replace with the actual selector for email input
+    await page.type('#login-email', email); // Use the email passed from the request
+    
+    await page.waitForSelector('#login-password'); // Replace with the actual selector for password input
+    await page.type('#login-password', password); // Use the password passed from the request
+    
+    // Click the login button (update selector to match the login button)
+    await page.click('button[type="submit"]'); // Update with actual selector for login button
+    
+    // Wait for navigation to complete
+    await page.waitForNavigation();
+    
+    // Continue with further actions if needed...
 
-    // Fill in the email and password fields
-    await newPage.fill('#login-email', 'your-email@example.com');  // Replace with your email
-    console.log("Filled email");
-
-    await newPage.fill('#login-password', 'your-password');  // Replace with your password
-    console.log("Filled password");
-
-    // Prompt user to solve the CAPTCHA
-    console.log("Please solve the CAPTCHA, then press Enter to continue...");
-    await new Promise(resolve => process.stdin.once('data', resolve)); // Wait for user input
-
-    // Click the login button
-    await newPage.click('input[type="submit"]');
-    console.log("Clicked submit button");
-
-    // Wait for a successful login (change this selector to match the success element)
-    try {
-        await newPage.waitForSelector('selector-for-success-message', { timeout: 30000 }); // Adjust the selector
-        console.log("Login successful!");
-    } catch (error) {
-        console.log("Login failed or CAPTCHA not solved in time.");
-    }
-
-    // Take a screenshot after logging in
-    await newPage.screenshot({ path: 'screenshot.png' });
-    console.log("Screenshot taken");
-
-    // Continue with further scraping actions as needed...
-
-    await browser.close();
+    // Close the browser (if you want to close it at this point)
+    // await browser.close();
 }
 
+// API endpoint to handle the scraping request
 app.post('/getData', async (req, res) => {
+    const { email, password } = req.body; // Expecting email and password in the request body
+
+    if (!email || !password) {
+        return res.status(400).send("Email and password are required.");
+    }
+
     try {
-        await scrapeData();
-        res.status(200).send("Data scraped and screenshot taken.");
+        await test(email, password); // Pass email and password to the test function
+        res.status(200).send("Browser opened and actions performed.");
     } catch (error) {
         console.error(error);
         res.status(500).send("An error occurred.");
