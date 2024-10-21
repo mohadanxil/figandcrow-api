@@ -9,7 +9,8 @@ const port = 3001;
 app.use(cors());
 app.use(express.json());
 
-async function test(email, password) {
+async function test(email, password, dimensions) {
+    console.log("got it in test", dimensions);
     const { browser, page } = await connect({
         headless: false,
         args: [],
@@ -24,10 +25,10 @@ async function test(email, password) {
     });
 
     // Set viewport to full size
-    const dimensions = {
-        width: 1920, // Set width to 1920px or any desired width
-        height: 1080 // Set height to 1080px or any desired height
-    };
+    // const dimensions = {
+    //     width: 1920, // Set width to 1920px or any desired width
+    //     height: 1080 // Set height to 1080px or any desired height
+    // };
     await page.setViewport(dimensions);
 
     await page.goto('https://www.printful.com/auth/login');
@@ -51,14 +52,14 @@ async function test(email, password) {
 
 // API endpoint to handle the scraping request
 app.post('/getData', async (req, res) => {
-    const { email, password } = req.body; // Expecting email and password in the request body
-
-    if (!email || !password) {
+    const { email, password, dimensions } = req.body; // Expecting email and password in the request body
+    console.log("asdf", dimensions);
+    if (!email || !password || !dimensions) {
         return res.status(400).send("Email and password are required.");
     }
 
     try {
-        await test(email, password); // Pass email and password to the test function
+        await test(email, password, dimensions); // Pass email and password to the test function
         res.status(200).send("Browser opened and actions performed.");
     } catch (error) {
         console.error(error);
