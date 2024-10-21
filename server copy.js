@@ -1,9 +1,6 @@
+const { connect } = require("puppeteer-real-browser");
 const express = require('express');
 const cors = require('cors');
-const { chromium } = require('playwright');
-const fs = require('fs');
-const path = require('path');
-const archiver = require('archiver');
 
 const app = express();
 const port = 3001;
@@ -12,199 +9,252 @@ const port = 3001;
 app.use(cors());
 app.use(express.json());
 
-async function scrapeData(urls) {
-    const browser = await chromium.launch({ headless: true });
-    const results = [];
-    const nameSheet = 'Data.csv';
-
-    async function scrapePageData(pageUrl) {
-        const newPage = await browser.newPage();
-        try {
-            await newPage.goto(pageUrl);
-            await newPage.waitForSelector('[jstcache="3"]', { timeout: 10000 });
-            const name = await newPage.$eval('h1', el => el.textContent.trim()).catch(() => '');
-            const rating = await newPage.$eval('[aria-label*="stars"]', el => el.textContent.trim()).catch(() => '');
-            const reviews = await newPage.$eval('[aria-label*=" reviews"]', el => el.textContent.replace(/\(|\)/g, '').trim()).catch(() => '');
-            const category = await newPage.$eval('[aria-label="Category"]', el => el.textContent.trim()).catch(() => '');
-            const address = await newPage.$eval('[data-item-id="address"]', el => el.textContent.trim()).catch(() => '');
-            const website = await newPage.$eval('[data-item-id="authority"]', el => el.href.trim()).catch(() => '');
-            const phone = await newPage.$eval('[data-tooltip="Copy phone number"]', el => el.textContent.trim()).catch(() => '');
-            const price = await newPage.$eval('button[aria-haspopup="dialog"]', el => el.getAttribute('aria-label')).catch(() => '');
-            const starRating = await newPage.$eval('.F7nice span[aria-hidden="true"]', el => el.textContent.trim()).catch(() => '');
-            const totalReviews = await newPage.$eval('.F7nice span[aria-label*=" reviews"]', el => el.textContent.trim()).catch(() => '');
-
-            // Click on the "View more amenities" button if it exists
-            const viewMoreAmenitiesButton = await newPage.$('button[aria-label="View more amenities"]');
-            if (viewMoreAmenitiesButton) {
-                await viewMoreAmenitiesButton.click();
-                await newPage.waitForTimeout(2000); // wait for amenities to load
-            }
-
-            // Extract amenities
-            let amenities = await newPage.$$eval('.QoXOEc .CK16pd', items => {
-                return items.map(item => {
-                    const label = item.getAttribute('aria-label');
-                    const isAvailable = !item.classList.contains('fyvs7e');
-                    if (isAvailable) {
-                        return label;
-                    }
-                });
-            }).catch(() => []);
-            amenities = amenities?.filter((item) => item !== undefined);
-
-            return {
-                name: `"${name}"`,
-                rating: `"${rating}"`,
-                reviews: `"${reviews}"`,
-                category: `"${category}"`,
-                address: `"${address}"`,
-                website: `"${website}"`,
-                phone: `"${phone}"`,
-                price: `"${price}"`,
-                starRating: `"${starRating}"`,
-                totalReviews: `"${totalReviews}"`,
-                amenities: `"${amenities.join(",")}"`,
-                url: `"${pageUrl}"`
-            };
-        } catch (error) {
-            console.error(`Error scraping URL ${pageUrl}:`, error);
-            return null;
-        } finally {
-            await newPage.close();
-        }
-    }
-
-    async function GetData(Links) {
-        const {url:googleUrls,type,city} = Links
-        console.time("Execution Time");
-        const page = await browser.newPage();
-        console.log('Navigating to Google Maps search page...', googleUrls);
-        await page.goto(googleUrls);
-        console.log(`[aria-label='Results for ${type} in ${city}']`)
-        await page.waitForSelector(`[aria-label="Results for ${type} in ${city}"]`, { timeout: 10000 });
-        const scrollableSelector = `[aria-label="Results for ${type} in ${city}"]`;
-        let previousHeight = await page.evaluate(`document.querySelector('${scrollableSelector}').scrollHeight`);
-        console.log('Scrolling through the list to load all results...');
-        while (true) {
-            await page.evaluate(`document.querySelector('${scrollableSelector}').scrollBy(0, document.querySelector('${scrollableSelector}').scrollHeight)`);
-            await page.waitForTimeout(3000);
-    
-            const newHeight = await page.evaluate(`document.querySelector('${scrollableSelector}').scrollHeight`);
-            console.log('Scrolled to new height:', newHeight);
-    
-            if (newHeight === previousHeight) {
-                break;
-            }
-            previousHeight = newHeight;
-        }
-    
-        const urls = await page.$$eval('a', links => links.map(link => link.href).filter(href => href.startsWith('https://www.google.com/maps/place/')));
-    
-        const batchSize = 5;
-        for (let i = 0; i < urls.length; i += batchSize) {
-            const batchUrls = urls.slice(i, i + batchSize);
-            const batchResults = await Promise.all(batchUrls.map(url => scrapePageData(url)));
-            results.push(...batchResults.filter(result => result !== null));
-            console.log(`Batch ${i / batchSize + 1} completed.`);
-        }
-
-        // Ensure writeCsv completes before closing the browser
-        if (results.length > 0) {
-            await writeCsv(results, `Data-${type}-${city}.csv`);
-        }
-        await browser.close();
-        console.timeEnd("Execution Time");
-    }
-
-    async function writeCsv(results, nameSheet) {
-        const csvHeader = 'Name,Rating,Reviews,Category,Address,Website,Phone,Price,StarRating,TotalReviews,Amenities,Url\n';
-        const csvRows = results.map(r => `${r.name},${r.rating},${r.reviews},${r.category},${r.address},${r.website},${r.phone},${r.price},${r.starRating},${r.totalReviews},${r.amenities},${r.url}`).join('\n');
-        
-        // Return a Promise that resolves when the file is written
-        return new Promise((resolve, reject) => {
-            fs.writeFile(nameSheet, csvHeader + csvRows, (err) => {
-                if (err) {
-                    console.error('Error writing CSV file:', err);
-                    reject(err);
-                } else {
-                    resolve();
-                }
-            });
-        });
-    }
-
-    // Start processing the URLs
-    if (urls) {
-        // for (const url of urls) {
-            await GetData(urls);
-        // }
-    }
-}
-async function createZip(zipFilePath, fileNames) {
-    console.log(fileNames)
-    const output = fs.createWriteStream(zipFilePath);
-    const archive = archiver('zip', {
-        zlib: { level: 9 } // Sets the compression level
+async function test(email, password, templateTitle) {
+    const { browser, page } = await connect({
+        headless: false,
+        slowMo:10,
+        args: [],
+        customConfig: {},
+        turnstile: true,
+        connectOption: {},
+        disableXvfb: false,
+        ignoreAllFlags: false,
+        plugins: [
+            // require('puppeteer-extra-plugin-click-and-wait')()
+        ]
     });
 
-    return new Promise((resolve, reject) => {
-        output.on('close', resolve);
-        archive.on('error', reject);
+    // Set viewport to full size
+    const dimensions = {
+        width: 1080,
+        height: 790
+    };
+    await page.setViewport(dimensions);
 
-        archive.pipe(output);
-        fileNames.forEach(fileName => {
-            archive.file(fileName, { name: path.basename(fileName) });
-        });
-        archive.finalize();
-    });
-}
-app.post('/getData', async (req, res) => {
-    const { fileName, urls } = req.body;
-    const generatedFiles = [];
+    // await page.goto('https://www.printful.com/auth/login');
+    // // Allow all necessary permissions
+    // await page.waitForSelector('[data-test="allow-all-cHLDkrEfrVoYQEQ"]');
+    // await page.click('[data-test="allow-all-cHLDkrEfrVoYQEQ"]');
+    
+    // // Log in with credentials
+    // await page.waitForSelector('#login-email');
+    // await page.type('#login-email', email);
+    
+    // await page.waitForSelector('#login-password');
+    // await page.type('#login-password', password);
+    
+    // await page.waitForSelector('input[type="submit"].pf-btn');
+    // await page.click('input[type="submit"].pf-btn');    
+    
+    // await page.waitForNavigation();
+   
+    // await page.click('li.sidebar__item:has(a[aria-label="Stores"]) a');
+
+    // // Click on the "Add product" button
+    // await page.waitForSelector('#addProductButton');
+    // await page.click('#addProductButton');
+    // // function wait(ms) {
+    // //     return new Promise(resolve => setTimeout(resolve, ms));
+    // // }
+    
+    // // Then use it like this:
+    // // await wait(600000); 
+    // // Navigate to "My Product Templates" tab
+    // await page.waitForSelector('.pf-tabs');
+    // await page.waitForSelector('#tab-product-templates');
+    // await page.evaluate(() => {
+    //     const tab = document.querySelector('#tab-product-templates');
+    //     if (tab) tab.scrollIntoView();
+    // });
+    // await page.click('[data-test="My product templates"]');
+
+    // // Wait for the templates to load
+    // await page.waitForFunction(() => {
+    //     const templatesContainer = document.querySelector('.product-template-picker-item');
+    //     return templatesContainer && templatesContainer.offsetParent !== null; // Check if the container is visible
+    // });
+
+    // // Get all template items and find the specified template
+    // const templates = await page.$$('.product-template-picker-item');
+    // let templateFound = false; // Flag to track if the template is found
+
+    // for (const template of templates) {
+    //     const titleElement = await template.$('h5.pf-h5');
+    //     const title = await page.evaluate(el => el.textContent.trim(), titleElement);
+
+    //     if (title === templateTitle) {
+    //         await template.click(); // Click on the template
+    //         console.log(`Selected template: ${title}`);
+    //         templateFound = true; // Set the flag to true
+    //         break; // Exit the loop once the template is clicked
+    //     }
+    // }
+
+    // // If the template was not found, throw an error
+    // if (!templateFound) {
+    //     throw new Error(`Template with title "${templateTitle}" not found.`);
+    // }
+
+    // // Proceed to mockups
+    // await page.waitForSelector('button[data-test="proceed-btn-TMy5EYwDLbVl8Pq"]', { visible: true });
+    // await page.click('button[data-test="proceed-btn-TMy5EYwDLbVl8Pq"]');
+
+    // // Click on the "Choose mockups" button
+    // await page.waitForSelector('a.pf-btn.pf-btn-secondary.pf-btn-block--mobile', { visible: true });
+    // await page.click('a.pf-btn.pf-btn-secondary.pf-btn-block--mobile');
+
+    // // Wait for the mockup slider to be visible
+    // await page.waitForSelector('.slick-track', { visible: true });
+
+    // // Get all mockup slides and select the one with "flat_back"
+    // const mockups = await page.$$('.mockup-slide');
+
+    // for (let i = 0; i < mockups.length; i++) {
+    //     const bgImage = await mockups[i].evaluate(el => {
+    //         const style = window.getComputedStyle(el);
+    //         return style.backgroundImage.slice(5, -2);
+    //     });
+
+    //     // Check if the URL contains the keyword "flat_back"
+    //     if (bgImage.includes('flat_back')) {
+    //         await mockups[i].click(); // Click on this specific mockup
+    //         console.log(`Clicked on mockup with URL: ${bgImage}`);
+    //         break; // Exit loop after clicking the desired mockup
+    //     }
+    // }
+
+    // // Click on the "Continue" button
+    // await page.waitForSelector('#js--continue', { visible: true });
+    // await page.click('#js--continue');
+
+    // // Fill in the input with the same title and "Test" as a suffix
+    // await page.waitForSelector('input[name="productTitle"]'); // Adjust this selector to the actual input field
+    // await page.type('input[name="productTitle"]', `${templateTitle} Test`);
+
+    // // Continue with further actions if needed...
+
+    // // Close the browser if you want to close it at this point
+    // await browser.close();
     try {
-        console.log(urls, "url");
+        await page.goto('https://www.printful.com/auth/login');
+        await page.waitForSelector('[data-test="allow-all-cHLDkrEfrVoYQEQ"]', { timeout: 10000 });
+        await page.click('[data-test="allow-all-cHLDkrEfrVoYQEQ"]');
 
-        // Call scrapeData and wait for it to complete
-         for (const url of urls) {
-            await scrapeData(url);
+        // Log in
+        await page.waitForSelector('#login-email', { timeout: 10000 });
+        await page.type('#login-email', email);
+        await page.waitForSelector('#login-password', { timeout: 10000 });
+        await page.type('#login-password', password);
+        await page.waitForSelector('input[type="submit"].pf-btn');
+        await page.click('input[type="submit"].pf-btn');
+        await page.waitForNavigation({ waitUntil: 'networkidle0' });
+
+        // Navigate to "Add product"
+        await page.waitForSelector('li.sidebar__item:has(a[aria-label="Stores"]) a', { timeout: 10000 });
+        await page.click('li.sidebar__item:has(a[aria-label="Stores"]) a');
+
+        // Click on the "Add product" button
+        await page.waitForSelector('#addProductButton', { timeout: 10000 });
+        await page.click('#addProductButton');
+
+        // Wait for the modal to open
+        const modal = await page.waitForSelector('#fullscreen-modal-vue', { visible: true });
+        console.log(modal)
+        if(modal){
+            // Navigate to "My Product Templates" tab within the modal
+            const tabSelector = '#tab-product-templates';
+            await page.waitForSelector('#tab-product-templates', { timeout: 10000 });
+            // await page.click('#tab-product-templates');
+
+            // You might want to add a delay to ensure the tab switch is complete
+            // await page.waitForTimeout(500); // Adjust the timeout as necessary
+
+            // Wait for the templates to load
+            // await page.waitForFunction(() => {
+            //     const templatesContainer = document.querySelector('.product-template-picker-item');
+            //     return templatesContainer && templatesContainer.offsetParent !== null;
+            // });
+
+            // // Get all template items and find the specified template
+            // const templates = await page.$$('.product-template-picker-item');
+            // let templateFound = false;
+
+            // for (const template of templates) {
+            //     const titleElement = await template.$('h5.pf-h5');
+            //     const title = await page.evaluate(el => el.textContent.trim(), titleElement);
+
+            //     if (title === templateTitle) {
+            //         await template.click(); // Click on the template
+            //         console.log(`Selected template: ${title}`);
+            //         templateFound = true; // Set the flag to true
+            //         break; // Exit the loop once the template is clicked
+            //     }
+            // }
+            // if (!templateFound) {
+            //     throw new Error(`Template with title "${templateTitle}" not found.`);
+            // }
+
+            // Proceed to mockups
+            // await page.waitForSelector('button[data-test="proceed-btn-TMy5EYwDLbVl8Pq"]', { visible: true });
+            // await page.click('button[data-test="proceed-btn-TMy5EYwDLbVl8Pq"]');
+
+            // // Click on the "Choose mockups" button
+            // await page.waitForSelector('a.pf-btn.pf-btn-secondary.pf-btn-block--mobile', { visible: true });
+            // await page.click('a.pf-btn.pf-btn-secondary.pf-btn-block--mobile');
+
+            // // Wait for the mockup slider to be visible
+            // await page.waitForSelector('.slick-track', { visible: true });
+
+            // // Get all mockup slides and select the one with "flat_back"
+            // const mockups = await page.$$('.mockup-slide');
+
+            // for (let mockup of mockups) {
+            //     const bgImage = await mockup.evaluate(el => {
+            //         const style = window.getComputedStyle(el);
+            //         return style.backgroundImage.slice(5, -2);
+            //     });
+
+            //     if (bgImage.includes('flat_back')) {
+            //         await mockup.click();
+            //         console.log(`Clicked on mockup with URL: ${bgImage}`);
+            //         break; // Exit loop after clicking the desired mockup
+            //     }
+            // }
+
+            // // Click on the "Continue" button
+            // await page.waitForSelector('#js--continue', { visible: true });
+            // await page.click('#js--continue');
+
+            // // Fill in the input with the same title and "Test" as a suffix
+            // await page.waitForSelector('input[name="productTitle"]', { visible: true });
+            // await page.type('input[name="productTitle"]', `${templateTitle} Test`);
+
+            // Continue with further actions if needed...
+            // await browser.close();
         }
-        for (const data of urls) {
-            const { type, city } = data;
-            const filePath = path.join(__dirname, `Data-${type}-${city}.csv`);
-            generatedFiles.push(filePath);
-        }
-
-        // for (const data of urls) {
-        //     const {url,type,city} = data
-        //     const filePath = path.join(__dirname, `Data-${type}-${city}.csv`);
-    
-        //     // Check if the file exists before trying to download it
-        //     if (fs.existsSync(filePath)) {
-        //         res.download(filePath, fileName, (err) => {
-        //             if (err) {
-        //                 console.error('Error sending file:', err);
-        //                 res.status(500).send('Error sending file');
-        //             }
-        //         });
-        //     } else {
-        //         res.status(404).send('Data file not found.');
-        //     }
-        // }
-        const zipFilePath = path.join(__dirname, `${fileName}.zip`);
-
-        // Create a zip file containing all the CSV files
-        await createZip(zipFilePath, generatedFiles);
-
-        // Send the zip file for download
-        res.download(zipFilePath, fileName, (err) => {
-            if (err) {
-                console.error('Error sending file:', err);
-                res.status(500).send('Error sending file');
-            }
-        });
 
     } catch (error) {
-        res.status(500).send(error.message);
+        console.error("An error occurred during the process:", error);
+    } finally {
+        // await browser.close(); // Ensure the browser closes in case of an error
+    }
+}
+
+// API endpoint to handle the scraping request
+app.post('/getData', async (req, res) => {
+    const { email, password } = req.body; // Expecting email and password in the request body
+    const title = "Hooded long-sleeve tee"; // This is the title you are looking for
+
+    if (!email || !password) {
+        return res.status(400).send("Email and password are required.");
+    }
+
+    try {
+        await test(email, password, title); // Pass email and password to the test function
+        res.status(200).send("Browser opened and actions performed.");
+    } catch (error) {
+        console.error(error);
+        res.status(500).send("An error occurred.");
     }
 });
 

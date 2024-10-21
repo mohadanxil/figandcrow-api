@@ -27,7 +27,7 @@ async function test(email, password, templateTitle) {
     // Set viewport to full size
     const dimensions = {
         width: 1080,
-        height: 790
+        height: 690
     };
     await page.setViewport(dimensions);
     try {
@@ -101,43 +101,84 @@ if (addToStoreButton) {
     } catch (error) {
         console.log('Error clicking on "Add to store" button:', error);
     }
-    await page.waitForSelector('.loading-overlay', { state: 'hidden' });
+    // await page.waitForSelector('.loading-overlay', { state: 'hidden' });
+    // const loading = await page.waitForSelector('.loading-overlay', { state: 'hidden' });
+    // const loadingEval = await page.$('.loading-overlay');
+    // console.log(loading,"loading",loadingEval);
+    const overlay = await page.$('.loading-overlay'); // Replace with actual overlay selector
+      if (overlay) {
+        console.log('Overlay found, hiding it before clicking.');
+        await overlay.evaluate(el => el.style.display = 'none');
+      }
     // Now, wait for the "Proceed to mockups" button to appear
     const proceedButton = await page.waitForSelector('button[data-test="proceed-btn-TMy5EYwDLbVl8Pq"]', { visible: true });
-    await page.waitForFunction(button => !button.disabled, {}, proceedButton);
+    // await page.waitForFunction(button => !button.disabled, {}, proceedButton);
     // Ensure proceedButton is defined
-    if (proceedButton) {
-        // Log button details
-        // const isDisabled = await page.evaluate(button => button.disabled, proceedButton);
-        // console.log(`"Proceed to mockups" button found. Disabled: ${isDisabled}`);
-
-        // // Wait for a moment to ensure any animations are finished
-        // // await page.waitForTimeout(1000); // Adjust the timeout as needed
-
-        // if (!isDisabled) {
-        //     // Scroll the button into view
-        
-        // Attempt to click the button
-        try {
-                await proceedButton.evaluate(el => el.scrollIntoView());
-                await page.evaluate(button => button.click(), proceedButton);
-                // const proceedButtonBoundingBox = await proceedButton.boundingBox();
-                // if (proceedButtonBoundingBox) {
-                //     await proceedButton.click();
-                //     // Move mouse and click
-                //     // await page.mouse.move(proceedButtonBoundingBox.x + proceedButtonBoundingBox.width / 2, proceedButtonBoundingBox.y + proceedButtonBoundingBox.height / 2);
-                //     // await page.mouse.click(proceedButtonBoundingBox.x + proceedButtonBoundingBox.width / 2, proceedButtonBoundingBox.y + proceedButtonBoundingBox.height / 2);
-                //     console.log('Clicked on "Proceed to mockups" button using mouse');
-                // } else {
-                //     await proceedButton.click();
-                //     console.log('Could not get bounding box for "Proceed to mockups" button.');
-                // }
+    async function waitForButtonAndClick(selector, maxRetries = 10, delay = 1000) {
+        let retries = 0;
+        let buttonEnabled = false;
+    
+        while (retries < maxRetries && !buttonEnabled) {
+            try {
+                // Wait for the button to be visible in the DOM
+                const button = await page.waitForSelector(selector, { visible: true });
+    
+                // Check if the button is disabled
+                const isDisabled = await page.evaluate(button => button.disabled, button);
+    
+                if (!isDisabled) {
+                    // If button is enabled, click it
+                    await button.click();
+                    buttonEnabled = true;
+                    console.log('Successfully clicked the "Proceed to mockups" button.');
+                } else {
+                    // If button is still disabled, retry after delay
+                    console.log(`Button is disabled, retrying... (Attempt ${retries + 1})`);
+                    await page.waitForTimeout(delay);
+                    retries++;
+                }
             } catch (error) {
-                console.log('Error clicking on "Proceed to mockups" button:', error);
+                console.log('Error while checking button status:', error);
             }
-        } else {
-            console.log('"Proceed to mockups" button is disabled, cannot click.');
         }
+    
+        if (!buttonEnabled) {
+            console.log('Max retries reached. Button did not become enabled.');
+        }
+    }
+    
+    // Call the function with your selector for the button
+    await waitForButtonAndClick('button[data-test="proceed-btn-TMy5EYwDLbVl8Pq"]', 20, 500);
+    // if (proceedButton) {
+    //     await proceedButton.evaluate(el => el.scrollIntoView());
+    //     // try {
+    //     //     await proceedButton.click();
+    //     //     console.log('Clicked on "Proceed to Mockups" button');
+    //     // } catch (error) {
+    //     //     console.log('Error clicking on "Proceed to Mockups" button:', error);
+    //     // }
+    //         try {
+    //             console.log("checking page with button");
+    //             await page.evaluate(button => button.click(), proceedButton);
+    //             console.log('Button Clicked');
+    //             // await browser.close()
+    //             // const proceedButtonBoundingBox = await proceedButton.boundingBox();
+    //             // if (proceedButtonBoundingBox) {
+    //                 // await proceedButton.click();
+    //                 // Move mouse and click
+    //                 // await page.mouse.move(proceedButtonBoundingBox.x + proceedButtonBoundingBox.width / 2, proceedButtonBoundingBox.y + proceedButtonBoundingBox.height / 2);
+    //                 // await page.mouse.click(proceedButtonBoundingBox.x + proceedButtonBoundingBox.width / 2, proceedButtonBoundingBox.y + proceedButtonBoundingBox.height / 2);
+    //                 // console.log('Clicked on "Proceed to mockups" button using mouse',proceedButtonBoundingBox);
+    //             // } else {
+    //             //     await proceedButton.click();
+    //             //     console.log('Could not get bounding box for "Proceed to mockups" button.');
+    //             // }
+    //         } catch (error) {
+    //             console.log('Error clicking on "Proceed to mockups" button:', error);
+    //         }
+    //     } else {
+    //         console.log('"Proceed to mockups" button is disabled, cannot click.');
+    //     }
     } else {
         console.log('"Proceed to mockups" button not found');
     }
@@ -189,6 +230,7 @@ if (addToStoreButton) {
     //   break; // Exit the loop if match found (optional)
     // }
   }
+  break;
 }
 
         // console.log(templateItems)
