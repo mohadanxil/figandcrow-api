@@ -1348,7 +1348,7 @@ async function selectMockupFormat(page) {
     }
 }
 
-
+//Product Detail Section
 async function inputProductTitle(page, title) {
   try {
     console.log("Attempting to input product title...");
@@ -1457,6 +1457,9 @@ async function handleProductPricing(page) {
     throw error;
   }
 }
+
+
+// Template Deletion
 async function deleteTemplate(page) {
   try {
     console.log("Attempting to delete template...");
@@ -1721,6 +1724,153 @@ async function deleteTemplateModal(page, buttonText) {
     throw error;
   }
 }
+
+// Product Deletion
+async function clickModalDeleteButton(page) {
+    try {
+      // Wait for modal to be fully visible
+    //   await page.waitForSelector('.modal-footer', {
+    //     visible: true,
+    //     timeout: 5000
+    //   });
+      await wait(3000); // Wait for modal animation
+  
+      // Define comprehensive button selectors
+      const deleteButtonSelectors = [
+        // Exact match based on your HTML
+        'a.pf-btn.pf-btn-primary.pf-mr-12',
+        // More general selectors
+        ".modal-footer .pf-btn",
+        ".modal-footer .pf-btn-primary",
+        ".modal-footer button",
+        'button[data-test*="delete-btn"]',
+        // XPath selectors for text-based matching
+        '//a[text()="Delete" and contains(@class, "pf-btn-primary")]',
+        '//button[text()="Delete"]'
+      ];
+  
+      for (const selector of deleteButtonSelectors) {
+        try {
+          console.log(`Trying selector: ${selector}`);
+  
+          // Handle XPath selectors
+          const elements = selector.startsWith("//")
+            ? await page.$(selector)
+            : await page.$$(selector);
+  
+          for (const element of elements) {
+            try {
+              // Get text content based on selector type
+              const elementText = selector.startsWith("//")
+                ? await page.evaluate((el) => el.textContent.trim(), element)
+                : await element.evaluate((el) => {
+                    const textContent = el.textContent.trim();
+                    return textContent.replace(/\s+/g, " ").trim();
+                  });
+  
+              console.log(`Found button with text: "${elementText}"`);
+  
+              if (elementText.toLowerCase().includes("delete")) {
+                console.log(`Found matching delete button`);
+  
+                // Check if button is visible and clickable
+                const isVisible = await page.evaluate((el) => {
+                  const rect = el.getBoundingClientRect();
+                  const style = window.getComputedStyle(el);
+                  return (
+                    rect.width > 0 &&
+                    rect.height > 0 &&
+                    style.visibility !== "hidden" &&
+                    style.display !== "none" &&
+                    !el.disabled
+                  );
+                }, element);
+  
+                if (!isVisible) {
+                  console.log(
+                    "Button is not visible or clickable, continuing search..."
+                  );
+                  continue;
+                }
+  
+                // Scroll into view if needed
+                await page.evaluate((el) => {
+                  el.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center",
+                  });
+                }, element);
+                await wait(500);
+  
+                // Wait for button to be enabled
+                await page.waitForFunction(
+                  (button) => !button.disabled,
+                  {},
+                  element
+                );
+  
+                // Try multiple click methods
+                try {
+                  // Method 1: Direct click with wait
+                  await element.click({
+                    delay: 100,
+                  });
+                  console.log("Delete button clicked successfully (Method 1)");
+                  return true;
+                } catch (clickError1) {
+                  try {
+                    // Method 2: Click using page.evaluate
+                    await page.evaluate((el) => {
+                      el.click();
+                    }, element);
+                    console.log("Delete button clicked successfully (Method 2)");
+                    return true;
+                  } catch (clickError2) {
+                    try {
+                      // Method 3: Click using JavaScript event
+                      await page.evaluate((el) => {
+                        const clickEvent = new MouseEvent("click", {
+                          view: window,
+                          bubbles: true,
+                          cancelable: true,
+                        });
+                        el.dispatchEvent(clickEvent);
+                      }, element);
+                      console.log("Delete button clicked successfully (Method 3)");
+                      return true;
+                    } catch (clickError3) {
+                      // Method 4: Try clicking by position
+                      const box = await element.boundingBox();
+                      if (box) {
+                        await page.mouse.click(
+                          box.x + box.width / 2,
+                          box.y + box.height / 2
+                        );
+                        console.log("Delete button clicked successfully (Method 4)");
+                        return true;
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (elementError) {
+              console.log("Error processing element:", elementError);
+              continue;
+            }
+          }
+        } catch (selectorError) {
+          console.log("Error with selector:", selectorError);
+          continue;
+        }
+      }
+  
+      console.log("Delete button not found in modal");
+      return false;
+    } catch (error) {
+      console.error("Error in clickModalDeleteButton:", error);
+      throw error;
+    }
+  }
 async function deleteProduct(page, templateTitle) {
     try {
       // Wait for the product list to be visible
@@ -1976,7 +2126,7 @@ async function deleteProduct(page, templateTitle) {
             //     if (button) button.click();
             //   });
             // }
-            await processModalButtons(page,"Delete")
+            await clickModalDeleteButton(page);
             console.log("Successfully initiated product deletion");
             return true;
           } catch (buttonError) {
@@ -2005,19 +2155,19 @@ async function test(email, password, templateTitle, title) {
   try {
     await login(page, email, password);
     // await navigateToStore(page, "anxil's Store");
-    await wait(2000);
+    // await wait(2000);
     // await selectProduct(page, templateTitle);
-    await wait(2000);
-    await navigateToTemplate(page);
-    await wait(1000);
-    await handleTemplateActions(page, templateTitle);
-    await wait(2000);
-    await handleMockupSelection(page, "flat");
-    await wait(2000);
-    await handleProductDetails(page);
-    await wait(2000);
-    await deleteTemplate(page);
-    await wait(2000);
+    // await wait(2000);
+    // await navigateToTemplate(page);
+    // await wait(1000);
+    // await handleTemplateActions(page, templateTitle);
+    // await wait(2000);
+    // await handleMockupSelection(page, "flat");
+    // await wait(2000);
+    // await handleProductDetails(page);
+    // await wait(2000);
+    // await deleteTemplate(page);
+    // await wait(2000);
     await navigateToStore(page, "anxil's Store");
     await wait(2000);
     await deleteProduct(page, templateTitle);
