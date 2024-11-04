@@ -488,7 +488,180 @@ async function clickUploadButton(
     }
   }
 }
+// async function selectAllColors(page) {
+//   try {
+//       // Wait for the color picker container to be present
+//       await page.waitForSelector('.color-picker');
 
+//       // Get all color buttons
+//       const buttons = await page.$$('.color-picker button.color-picker__color');
+//       console.log(`Found ${buttons.length} color buttons`);
+
+//       // Loop through each button
+//       for (const button of buttons) {
+//           await retry(
+//               async () => {
+//                   // Get the button ID/color name for logging
+//                   const colorId = await button.evaluate(el => el.id);
+//                   console.log(`Selecting color: ${colorId}`);
+
+//                   // Ensure the button is in view
+//                   await button.evaluate(el => {
+//                       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+//                   });
+
+//                   // Wait a brief moment for scroll to complete
+//                   await wait(100);
+
+//                   // Click the button
+//                   await button.click();
+
+//                   // Wait for any potential animations or state changes
+//                   await wait(100);
+//               },
+//               async () => {
+//                   // Verify the button was actually clicked by checking if it has the active class
+//                   const isActive = await button.evaluate(el =>
+//                       el.classList.contains('color-picker__color--active')
+//                   );
+
+//                   // Get the color name for logging
+//                   const colorId = await button.evaluate(el => el.id);
+
+//                   if (isActive) {
+//                       console.log(`Successfully selected color: ${colorId}`);
+//                   } else {
+//                       console.log(`Failed to select color: ${colorId}`);
+//                   }
+
+//                   return isActive;
+//               }
+//           );
+//       }
+
+//       // Final verification that all colors are selected
+//       const totalSelected = await page.evaluate(() => {
+//           const activeButtons = document.querySelectorAll('.color-picker__color--active');
+//           return activeButtons.length;
+//       });
+
+//       console.log(`Total colors selected: ${totalSelected}`);
+//       return totalSelected;
+
+//   } catch (error) {
+//       console.error('Error in selectAllColors:', error);
+//       throw error;
+//   }
+// }
+
+// Alternative version that selects specific colors
+// async function selectAllColors(page) {
+//   try {
+//       // Wait for the color picker container to be present
+//       await page.waitForSelector('.color-picker');
+
+//       // Get all color buttons
+//       const buttons = await page.$$('.color-picker .color-picker__color');
+//       console.log(`Found ${buttons.length} color buttons`);
+
+//       // Loop through each button
+//       for (const button of buttons) {
+//           try {
+//               // Get the button ID/color name for logging
+//               const colorId = await button.evaluate(el => el.id);
+//               console.log(`Attempting to select color: ${colorId}`);
+
+//               // Ensure button is not covered and is clickable
+//               await page.evaluate(async (btn) => {
+//                   // Force the button to be visible and clickable
+//                   btn.style.opacity = '1';
+//                   btn.style.visibility = 'visible';
+//                   btn.style.display = 'block';
+
+//                   // Ensure it's in the viewport
+//                   btn.scrollIntoView({ behavior: 'instant', block: 'center' });
+//               }, button);
+
+//               // Wait a moment for any scrolling
+//               await wait(100);
+
+//               // Click using JavaScript click() method
+//               await page.evaluate(btn => {
+//                   // Remove any pointer-events: none if present
+//                   btn.style.pointerEvents = 'auto';
+
+//                   // Create and dispatch mousedown, mouseup, and click events
+//                   ['mousedown', 'mouseup', 'click'].forEach(eventType => {
+//                       const event = new MouseEvent(eventType, {
+//                           view: window,
+//                           bubbles: true,
+//                           cancelable: true,
+//                           buttons: 1
+//                       });
+//                       btn.dispatchEvent(event);
+//                   });
+//               }, button);
+
+//               // Verify the click worked
+//               const isActive = await button.evaluate(el =>
+//                   el.classList.contains('color-picker__color--active')
+//               );
+
+//               if (isActive) {
+//                   console.log(`Successfully selected color: ${colorId}`);
+//               } else {
+//                   console.log(`Initial click failed for ${colorId}, trying alternate method...`);
+
+//                   // Try an alternate click method using page.evaluate
+//                   await page.evaluate(btn => {
+//                       // Force focus
+//                       btn.focus();
+
+//                       // Trigger native click
+//                       btn.click();
+
+//                       // If that didn't work, try dispatching events at the document level
+//                       if (!btn.classList.contains('color-picker__color--active')) {
+//                           const rect = btn.getBoundingClientRect();
+//                           const x = rect.left + rect.width / 2;
+//                           const y = rect.top + rect.height / 2;
+
+//                           ['mousedown', 'mouseup', 'click'].forEach(eventType => {
+//                               const event = new MouseEvent(eventType, {
+//                                   view: window,
+//                                   bubbles: true,
+//                                   cancelable: true,
+//                                   clientX: x,
+//                                   clientY: y,
+//                                   buttons: 1
+//                               });
+//                               document.elementFromPoint(x, y).dispatchEvent(event);
+//                           });
+//                       }
+//                   }, button);
+//               }
+
+//           } catch (error) {
+//               console.error(`Error clicking button:`, error);
+//           }
+
+//           // Brief pause between clicks
+//           await wait(100);
+//       }
+
+//       // Final verification
+//       const totalSelected = await page.evaluate(() => {
+//           return document.querySelectorAll('.color-picker__color--active').length;
+//       });
+
+//       console.log(`Total colors selected: ${totalSelected}`);
+//       return totalSelected;
+
+//   } catch (error) {
+//       console.error('Error in selectAllColors:', error);
+//       throw error;
+//   }
+// }
 async function selectAllColors(page) {
   try {
     // Wait for the color picker container to be present
@@ -632,6 +805,123 @@ async function selectAllColors(page) {
     throw error;
   }
 }
+// async function selectAllColors(page) {
+//   try {
+//     await page.waitForSelector('.color-picker');
+
+//     // Get all color buttons and create a map to track attempts
+//     const buttons = await page.$$('.color-picker .color-picker__color');
+//     const colorAttempts = new Map();
+
+//     console.log(`Found ${buttons.length} color buttons`);
+
+//     for (const button of buttons) {
+//       const colorId = await button.evaluate(el => el.id);
+
+//       // Skip if we've already tried this color 3 times
+//       if (colorAttempts.get(colorId) >= 3) {
+//         console.warn(`Skipping ${colorId} after multiple failed attempts`);
+//         continue;
+//       }
+
+//       // Increment attempt counter
+//       colorAttempts.set(colorId, (colorAttempts.get(colorId) || 0) + 1);
+
+//       try {
+//         console.log(`Attempting to select color: ${colorId} (Attempt ${colorAttempts.get(colorId)})`);
+
+//         // Ensure element is ready for interaction
+//         await button.evaluate(btn => {
+//           btn.style.opacity = '1';
+//           btn.style.visibility = 'visible';
+//           btn.style.display = 'block';
+//           btn.style.pointerEvents = 'auto';
+//           btn.scrollIntoView({ behavior: 'instant', block: 'center' });
+//         });
+
+//         // Wait for any animations/transitions
+//         await wait(150);
+
+//         // Try regular click first
+//         await button.click({ force: true });
+
+//         // Verify click success
+//         const isActive = await button.evaluate(el =>
+//           el.classList.contains('color-picker__color--active')
+//         );
+
+//         if (!isActive) {
+//           console.log(`Standard click failed for ${colorId}, trying programmatic events...`);
+
+//           // Try programmatic event dispatch as fallback
+//           await page.evaluate(btn => {
+//             const rect = btn.getBoundingClientRect();
+//             const x = rect.left + rect.width / 2;
+//             const y = rect.top + rect.height / 2;
+
+//             // Force element to be interactive
+//             btn.focus();
+
+//             // Try both direct and bubbling events
+//             ['mousedown', 'mouseup', 'click'].forEach(eventType => {
+//               // Direct on element
+//               btn.dispatchEvent(new MouseEvent(eventType, {
+//                 bubbles: true,
+//                 cancelable: true,
+//                 buttons: 1
+//               }));
+
+//               // Through document at coordinates
+//               document.elementFromPoint(x, y)?.dispatchEvent(new MouseEvent(eventType, {
+//                 bubbles: true,
+//                 cancelable: true,
+//                 clientX: x,
+//                 clientY: y,
+//                 buttons: 1
+//               }));
+//             });
+//           }, button);
+
+//           // Verify the fallback worked
+//           const secondCheck = await button.evaluate(el =>
+//             el.classList.contains('color-picker__color--active')
+//           );
+
+//           if (!secondCheck) {
+//             throw new Error(`Failed to select color ${colorId} after multiple attempts`);
+//           }
+//         }
+
+//         console.log(`Successfully selected color: ${colorId}`);
+
+//       } catch (error) {
+//         console.error(`Error selecting ${colorId}:`, error.message);
+
+//         // Add to retry queue if under attempt limit
+//         if (colorAttempts.get(colorId) < 3) {
+//           console.log(`Will retry ${colorId} later`);
+//           buttons.push(button);
+//         }
+//       }
+
+//       await wait(100);
+//     }
+
+//     const results = await page.evaluate(() => {
+//       const selected = document.querySelectorAll('.color-picker__color--active');
+//       const total = document.querySelectorAll('.color-picker__color').length;
+//       return { selected: selected.length, total };
+//     });
+
+//     console.log(`Selected ${results.selected}/${results.total} colors`);
+
+//     return results;
+
+//   } catch (error) {
+//     console.error('Error in selectAllColors:', error);
+//     throw error;
+//   }
+// }
 async function selectColors(page, colorNames = []) {
   try {
     // Wait for the color picker container

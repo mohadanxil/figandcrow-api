@@ -129,101 +129,76 @@ async function ensureClickable(page, selector, timeout = 10000) {
 
 Can you help me implement similar retry and verification logic for my store navigation function:
 
-async function clickChooseMockupsButton(page) {
+async function navigateToCatalog(page, searchTerm) {
+    console.log(searchTerm)
     try {
-      console.log("Attempting to find and click Choose mockups button...");
-  
-      // Wait for any loading indicators to disappear
-      try {
-        await page.waitForSelector(SELECTORS.MOCKUP.LOADING_INDICATOR, {
-          hidden: true,
-          timeout: 5000,
+        const storesNavButton = await ensureClickable(page, SELECTORS.NAVIGATION.CATALOG);
+        await storesNavButton.click();
+        await wait(5000);
+
+        await page.type("#sitewide-search-input", searchTerm, {
+            delay: 10
         });
-      } catch (loadingError) {
-        console.log("No loading indicator found or already hidden");
-      }
-  
-      // Multiple methods to find the Choose mockups button
-      const buttonSelectors = [
-        ".mockup-type-picker a.pf-btn.pf-btn-secondary.pf-btn-block--mobile",
-        // Direct text content match
-        'button:has-text("Choose mockups")',
-        // Data test attribute if available
-        'button[data-test="choose-mockups-btn"]',
-        // Class-based selector if specific class exists
-        ".mockup-selection-button",
-        // XPath as fallback
-        '//button[contains(text(), "Choose mockups")]',
-      ];
-      await wait(2000);
-      let button = null;
-      for (const selector of buttonSelectors) {
-        try {
-          button = await page.waitForSelector(selector, {
-            visible: true,
-            timeout: 5000,
-          });
-          if (button) {
-            console.log(`Found button using selector: ${selector}`);
-            break;
-          }
-        } catch (err) {
-          console.log(`Selector ${selector} not found, trying next...`);
-        }
-      }
-  
-      if (!button) {
-        throw new Error("Choose mockups button not found with any selector");
-      }
-  
-      // Ensure button is visible and clickable
-      await page.evaluate((btn) => {
-        if (btn) {
-          btn.scrollIntoView({
-            behavior: "smooth",
-            block: "center",
-          });
-        }
-      }, button);
-  
-      await wait(1000); // Wait for scroll to complete
-  
-      // Attempt to click the button using multiple methods
-      try {
-        // Method 1: Direct click
-        await button.click({
-          delay: 100,
-        });
-      } catch (clickError) {
-        console.log("Direct click failed, trying alternative methods");
-        try {
-          // Method 2: Page click
-          await page.click('button:has-text("Choose mockups")');
-        } catch (pageClickError) {
-          // Method 3: Evaluate click
-          await page.evaluate(() => {
-            const buttons = Array.from(document.querySelectorAll("button"));
-            const chooseMockupsBtn = buttons.find(
-              (btn) => btn.textContent.trim().toLowerCase() === "choose mockups"
-            );
-            if (chooseMockupsBtn) {
-              chooseMockupsBtn.click();
+        await wait(3000);
+        
+        const searchedItems = await page.$$(".sitewide-search__item--product");
+        console.log(searchedItems, "searchItems");
+
+        for (const item of searchedItems) {
+            await item.click();
+            await page.waitForNavigation();
+            await wait(3000);
+
+            await page.evaluate(() => {
+                const buttonGroup = document.querySelector(".product-action-buttons__wrapper");
+                if (buttonGroup) {
+                    buttonGroup.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center",
+                    });
+                }
+            });
+
+            const buttons = await page.$$(".product-action-buttons__wrapper button");
+            for (const button of buttons) {
+                try {
+                    const buttonText = await button.evaluate((el) => {
+                        return el.textContent.trim().replace(/\s+/g, " ");
+                    });
+                    if (buttonText === "Create product template") {
+                        await button.click();
+                        await wait(4000);
+                        
+                        // Prevent default file input behavior before clicking upload button
+                        await page.evaluate(() => {
+                            // Remove any existing file input event listeners
+                            const originalAddEventListener = Element.prototype.addEventListener;
+                            Element.prototype.addEventListener = function (type, listener, options) {
+                                if (type === 'click' && this.classList.contains('product-push__droparea')) {
+                                    return; // Don't add click listeners for this element
+                                }
+                                originalAddEventListener.call(this, type, listener, options);
+                            };
+                            
+                            // Disable any file inputs
+                            const fileInputs = document.querySelectorAll('input[type="file"]');
+                            fileInputs.forEach(input => {
+                                input.disabled = true;
+                            });
+                        });
+                        
+                        // Now try to click the upload button
+                        await clickUploadButton(page);
+                        await handleModalButton(page,"saveTemplate")
+                    }
+                } catch (error) {
+                    console.error("Error processing button:", error);
+                }
             }
-          });
         }
-      }
-      await wait(3000);
-      // Verify that the click worked by waiting for the mockup grid
-      // await page.waitForSelector(SELECTORS.MOCKUP.MOCKUP_GRID, {
-      //     visible: true,
-      //     timeout: 10000
-      // });
-  
-      console.log("Successfully clicked Choose mockups button");
-      return true;
     } catch (error) {
-      console.error("Error in clickChooseMockupsButton:", error);
-      throw error;
+        console.error("Store navigation failed:", error.message);
+        throw error;
     }
 }
 
