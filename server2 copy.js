@@ -244,39 +244,33 @@ async function verifyLoginSuccess(page) {
 }
 async function retry(fn, verifyFn, maxAttempts = 5) {
   let lastError;
-  
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-          // Execute the main function
-          const response = await fn();
-          
-          // If verification function exists, wait for it to pass
-          if (verifyFn) {
-              const isSuccess = await verifyFn(response);
-              if (!isSuccess) {
-                  throw new Error(`Verification failed on attempt ${attempt}`);
-              }
-              console.log(`Verification successful on attempt ${attempt}`);
-          }
-          
-          return response;
-      } catch (error) {
-          lastError = error;
-          console.log(`Attempt ${attempt}/${maxAttempts} failed: ${error.message}`);
-          
-          // On last attempt, throw the error
-          if (attempt === maxAttempts) {
-              break;
-          }
-          
-          // Exponential backoff with some randomization
-          const delay = Math.min(1000 * Math.pow(2, attempt - 1) + Math.random() * 1000, 10000);
-          await new Promise(resolve => setTimeout(resolve, delay));
+    try {
+      let response = await fn();
+      // If verification function is provided, check if action was successful
+      if (verifyFn) {
+        const isSuccess = await verifyFn(response??null);
+        if (!isSuccess) {
+          throw new Error("Action verification failed");
+        }
+        console.log('verifcation Sucess');
+        
       }
+      return response ?? null;
+    } catch (error) {
+      lastError = error;
+      console.log(`Attempt ${attempt}/${maxAttempts} failed: ${error.message}`);
+      if (attempt === maxAttempts) break;
+      await new Promise((resolve) =>
+        setTimeout(resolve, 1000 * Math.pow(2, attempt - 1))
+      );
+    }
   }
-  
-  throw new Error(`Failed after ${maxAttempts} attempts. Last error: ${lastError.message}`);
+  throw new Error(
+    `Failed after ${maxAttempts} attempts. Last error: ${lastError.message}`
+  );
 }
+
 async function handleCookiePopup(page) {
   try {
     // Wait for a shorter time to check if cookie popup exists
@@ -652,7 +646,7 @@ async function navigateToStore(page, storeName) {
 //       throw error;
 //     }
 // }
-async function clickUploadButton(page, selector = '.product-push__droparea button',imageId) {
+async function clickUploadButton(page, selector = '.product-push__droparea button') {
     const methods = [
         // Method 1: Standard click with wait
         async () => {
@@ -746,9 +740,8 @@ async function clickUploadButton(page, selector = '.product-push__droparea butto
                 
                 // Wait a moment to check if the custom UI appears
                 await wait(1000);
-                await selectAndApplyMedia(page,imageId);
-                await wait(1000);
-                await browserSet(page);
+                await selectAndApplyMedia(page,"a51cf9_8e7b1ddc588a4b0b8bb7be4e157aa45c~mv2.png");
+                await browserSet(page)
                 // if(returnedImage){
                 //     // await 
                 // }
@@ -1150,7 +1143,7 @@ async function clickUploadButton(page, selector = '.product-push__droparea butto
 //         throw error;
 //     }
 // }
-async function navigateToCatalog(page, searchTerm, imageId) {
+async function navigateToCatalog(page, searchTerm) {
     console.log(`Navigating to catalog with search term: ${searchTerm}`);
     try {
         // Navigate to catalog
@@ -1168,160 +1161,51 @@ async function navigateToCatalog(page, searchTerm, imageId) {
                 });
             }
         );
-        // Scroll to top before searching
-        await page.evaluate(() => {
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-      });
-      await wait(1000);
 
-      // Search for item with improved handling
-      await retry(
-          async () => {
-              // Wait for search input and ensure it's visible
-              const searchInput = await page.waitForSelector("#sitewide-search-input", {
-                  visible: true,
-                  timeout: 10000
-              });
+        // Search for item
+        await retry(
+            async () => {
+                await page.waitForSelector("#sitewide-search-input");
+                await page.type("#sitewide-search-input", searchTerm, { delay: 10 });
+            },
+            async () => {
+                // Verify the search input has the correct value
+                const inputValue = await page.$eval(
+                    "#sitewide-search-input",
+                    (el) => el.value
+                );
+                return inputValue === searchTerm;
+            }
+        );
 
-              // Scroll element into view if needed
-              await page.evaluate(() => {
-                  const searchInput = document.querySelector("#sitewide-search-input");
-                  const rect = searchInput.getBoundingClientRect();
-                  const isVisible = (
-                      rect.top >= 0 &&
-                      rect.left >= 0 &&
-                      rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-                      rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-                  );
-                  
-                  if (!isVisible) {
-                      searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  }
-              });
-              await wait(1000);
-
-              // Clear input using multiple methods for reliability
-              await page.evaluate(() => {
-                  const searchInput = document.querySelector("#sitewide-search-input");
-                  searchInput.value = "";
-                  searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-              });
-              
-              // Focus the input
-              await searchInput.click({ clickCount: 3 }); // Triple click to select all
-              await page.keyboard.press('Backspace');
-              
-              // Type the search term with increased delay
-              await page.type("#sitewide-search-input", searchTerm, { delay: 50 });
-              
-              // Ensure the input event is fired
-              await page.evaluate((term) => {
-                  const searchInput = document.querySelector("#sitewide-search-input");
-                  searchInput.value = term;
-                  searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-                  searchInput.dispatchEvent(new Event('change', { bubbles: true }));
-              }, searchTerm);
-
-              await wait(2000);
-          },
-          async () => {
-              // Verify the search input has the correct value
-              const inputValue = await page.$eval(
-                  "#sitewide-search-input",
-                  (el) => {
-                      console.log(el.value, "el.value");
-                      return el.value;
-                  }
-              );
-              console.log(inputValue, "inputValue");
-              return inputValue === searchTerm;
-          },
-          7 // Increased max attempts for search
-      );
-
-      // Wait for and verify search results with scroll handling
-      await retry(
-          async () => {
-              // First wait for any search results
-              await page.waitForSelector(".sitewide-search__item--product", {
-                  visible: true,
-                  timeout: 15000
-              });
-
-              // Implement infinite scroll handling
-              let previousHeight;
-              let scrollAttempts = 0;
-              const maxScrollAttempts = 5;
-
-              while (scrollAttempts < maxScrollAttempts) {
-                  previousHeight = await page.evaluate('document.body.scrollHeight');
-                  
-                  await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
-                  await wait(2000); // Wait for potential new items to load
-                  
-                  const currentHeight = await page.evaluate('document.body.scrollHeight');
-                  if (currentHeight === previousHeight) {
-                      scrollAttempts++;
-                  } else {
-                      scrollAttempts = 0; // Reset counter if we found new content
-                  }
-
-                  // Check if we have enough items
-                  const itemCount = await page.$$eval(".sitewide-search__item--product", items => items.length);
-                  if (itemCount > 0) {
-                      break; // Exit if we have results
-                  }
-              }
-          },
-          async () => {
-              const searchedItems = await page.$$(".sitewide-search__item--product");
-              const itemCount = searchedItems.length;
-              console.log(`Found ${itemCount} search results`);
-              return itemCount > 0;
-          },
-          5 // Max attempts for getting search results
-      );
-
-      // Add a final scroll back to top
-      await page.evaluate(() => {
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-      });
-      await wait(1000);
+        // Wait for and verify search results
+        await retry(
+            async () => {
+                await page.waitForSelector(".sitewide-search__item--product");
+            },
+            async () => {
+                const searchedItems = await page.$$(".sitewide-search__item--product");
+                return searchedItems.length > 0;
+            }
+        );
 
         // Get all search results
         const searchedItems = await page.$$(".sitewide-search__item--product");
-        console.log(searchedItems);
         
         // Process each search result
         for (const item of searchedItems) {
-          await retry(
-              async () => {
-                  // Store the href before clicking
-                  const href = await page.evaluate(element => {
-                      const link = element.querySelector('a') || element;
-                      return link.href;
-                  }, item);
-
-                  // Click and wait for navigation
-                  await Promise.all([
-                      page.waitForNavigation({ 
-                          waitUntil: 'networkidle0',
-                          timeout: 30000 
-                      }),
-                      item.click()
-                  ]);
-
-                  return href; // Return href for verification
-              },
-              async (href) => {
-                  // Verify navigation using the stored href
-                  await wait(2000); // Small delay to ensure page load
-                  const currentUrl = await page.evaluate(() => window.location.href);
-                  return currentUrl.includes("/custom/") || currentUrl === href;
-              }
-          );
-          
-    
+            await retry(
+                async () => {
+                    await item.click();
+                    await page.waitForNavigation();
+                },
+                async () => {
+                    // Verify we're on a product page
+                    return await page.evaluate(() => {
+                        return document.querySelector("#products-catalog") !== null;
+                    });
+                }
+            );
 
             // Scroll to button group
             await retry(
@@ -1338,7 +1222,7 @@ async function navigateToCatalog(page, searchTerm, imageId) {
                         }
                     });
                 },
-                async () => { 
+                async () => {
                     // Verify button group is in viewport
                     return await page.evaluate(() => {
                         const buttonGroup = document.querySelector(".product-action-buttons__wrapper");
@@ -1414,7 +1298,7 @@ async function navigateToCatalog(page, searchTerm, imageId) {
             // Click upload button and handle modal
             await retry(
                 async () => {
-                    await clickUploadButton(page,'.product-push__droparea button',imageId);
+                    await clickUploadButton(page);
                     await handleModalButton(page, "saveTemplate");
                 },
                 async () => {
@@ -1424,9 +1308,8 @@ async function navigateToCatalog(page, searchTerm, imageId) {
                     });
                 }
             );
-            console.log("Successfully navigated to product page");
-             break; // Break after first successful navigation
-            // await navigateToTemplate(page)
+            console.log("done finishing");
+            await navigateToTemplate(page)
             
         }
     } catch (error) {
@@ -2058,95 +1941,93 @@ async function selectWixStore(page, maxRetries = 3) {
 //     }
 // }
 async function navigateToTemplate(page) {
-  console.log("Navigating to template");
-  try {
-      // Navigate to templates page with retry
-      await retry(
-          async () => {
-              // Ensure we're on a valid page context first
-              await wait(1000);
-              
-              // Re-select the element each time to avoid stale references
-              const templatesSidebarLink = await page.waitForSelector(
-                  SELECTORS.TEMPLATE.SIDEBAR_LINK,
-                  { state: 'visible', timeout: 10000 }
-              );
-              
-              if (!templatesSidebarLink) {
-                  throw new Error('Template sidebar link not found');
-              }
-              
-              // Click and wait for navigation to complete
-              await Promise.all([
-                  templatesSidebarLink.click(),
-                  page.waitForNavigation({ waitUntil: 'networkidle0' })
-              ]);
-          },
-          async () => {
-              try {
-                  // Verify that the templates page has loaded
-                  await page.waitForSelector(SELECTORS.TEMPLATE.GRID, {
-                      state: 'visible',
-                      timeout: 5000
-                  });
-                  return true;
-              } catch (error) {
-                  console.log('Template grid verification failed:', error.message);
-                  return false;
-              }
-          }
-      );
+    console.log("Navigating to template");
+    try {
+        // Navigate to templates page with retry
+        await retry(
+            async () => {
+                // Ensure we're on a valid page context first
+                await wait(1000);
+                
+                // Re-select the element each time to avoid stale references
+                const templatesSidebarLink = await page.waitForSelector(
+                    SELECTORS.TEMPLATE.SIDEBAR_LINK,
+                    { state: 'visible', timeout: 10000 }
+                );
+                
+                if (!templatesSidebarLink) {
+                    throw new Error('Template sidebar link not found');
+                }
+                
+                // Click and wait for navigation to complete
+                await Promise.all([
+                    templatesSidebarLink.click(),
+                    page.waitForNavigation({ waitUntil: 'networkidle0' })
+                ]);
+            },
+            async () => {
+                try {
+                    // Verify that the templates page has loaded
+                    await page.waitForSelector(SELECTORS.TEMPLATE.GRID, {
+                        state: 'visible',
+                        timeout: 5000
+                    });
+                    return true;
+                } catch (error) {
+                    console.log('Template grid verification failed:', error.message);
+                    return false;
+                }
+            }
+        );
 
-      // Wait for and verify template grid contents
-      await retry(
-          async () => {
-              // Wait for the grid to be visible and contain items
-              await page.waitForSelector(SELECTORS.TEMPLATE.GRID_ITEM, {
-                  state: 'visible',
-                  timeout: 10000
-              });
-          },
-          async () => {
-              try {
-                  // Verify grid items are present and accessible
-                  const templateItems = await page.evaluate((selector) => {
-                      const items = document.querySelectorAll(selector);
-                      return items.length;
-                  }, SELECTORS.TEMPLATE.GRID_ITEM);
-                  
-                  console.log(`Found ${templateItems} templates`);
-                  return templateItems > 0;
-              } catch (error) {
-                  console.log('Template items verification failed:', error.message);
-                  return false;
-              }
-          }
-      );
+        // Wait for and verify template grid contents
+        await retry(
+            async () => {
+                // Wait for the grid to be visible and contain items
+                await page.waitForSelector(SELECTORS.TEMPLATE.GRID_ITEM, {
+                    state: 'visible',
+                    timeout: 10000
+                });
+            },
+            async () => {
+                try {
+                    // Verify grid items are present and accessible
+                    const templateItems = await page.evaluate((selector) => {
+                        const items = document.querySelectorAll(selector);
+                        return items.length;
+                    }, SELECTORS.TEMPLATE.GRID_ITEM);
+                    
+                    console.log(`Found ${templateItems} templates`);
+                    return templateItems > 0;
+                } catch (error) {
+                    console.log('Template items verification failed:', error.message);
+                    return false;
+                }
+            }
+        );
 
-      // Final verification of page state
-      const isValid = await page.evaluate((gridSelector) => {
-          const grid = document.querySelector(gridSelector);
-          return {
-              hasGrid: !!grid,
-              isVisible: grid ? window.getComputedStyle(grid).display !== 'none' : false,
-              url: window.location.href
-          };
-      }, SELECTORS.TEMPLATE.GRID);
-      console.log("is valid");
-      
-      if (!isValid.hasGrid || !isValid.isVisible) {
-          throw new Error(`Invalid template page state: ${JSON.stringify(isValid)}`);
-      }
-      console.log("navigating done");
-      
-      return true;
-  } catch (error) {
-      console.error("Error in navigateToTemplate:", {
-          message: error.message,
-          stack: error.stack
-      });
-      throw error;
-  }
+        // Final verification of page state
+        const isValid = await page.evaluate((gridSelector) => {
+            const grid = document.querySelector(gridSelector);
+            return {
+                hasGrid: !!grid,
+                isVisible: grid ? window.getComputedStyle(grid).display !== 'none' : false,
+                url: window.location.href
+            };
+        }, SELECTORS.TEMPLATE.GRID);
+
+        if (!isValid.hasGrid || !isValid.isVisible) {
+            throw new Error(`Invalid template page state: ${JSON.stringify(isValid)}`);
+        }
+
+        return true;
+    } catch (error) {
+        console.error("Error in navigateToTemplate:", {
+            message: error.message,
+            stack: error.stack
+        });
+        throw error;
+    }
 }
 
 // Helper function to safely check if an element exists and is visible
@@ -2173,8 +2054,6 @@ async function isElementVisible(page, selector, timeout = 5000) {
     }
 }
 async function handleTemplateActions(page, templateTitle) {
-  console.log("enter action template");
-  
     try {
       // Wait for and verify the template grid
       await retry(
@@ -2194,8 +2073,6 @@ async function handleTemplateActions(page, templateTitle) {
       // Find and click the correct template
       await retry(
         async () => {
-          console.log("fetching template");
-          
           const targetTemplate = await findTemplate(page, templateTitle);
           if (!targetTemplate) {
             throw new Error(`Template "${templateTitle}" not found in the list`);
@@ -2258,16 +2135,10 @@ async function handleTemplateActions(page, templateTitle) {
   }
   
 async function findTemplate(page, templateTitle) {
-console.log("geting template array");
 const templateItems = await page.$$(SELECTORS.TEMPLATE.GRID_ITEM);
-console.log("get template array");
-
 for (const item of templateItems) {
-console.log("looping template array");
-
-const linkHandle = await item.$(SELECTORS.TEMPLATE.LINK);
-if (linkHandle) {
-      console.log("got handle");
+    const linkHandle = await item.$(SELECTORS.TEMPLATE.LINK);
+    if (linkHandle) {
     const linkText = await page.evaluate((el) => el.textContent.trim(), linkHandle);
     if (linkText === templateTitle) {
         return item;
@@ -3063,9 +2934,9 @@ async function inputProductTitle(page, title,category="") {
     throw error;
   }
 }
-async function handleProductDetails(page,title,category) {
+async function handleProductDetails(page,item) {
   try {
-    await inputProductTitle(page, title,category);
+    await inputProductTitle(page, item?.title,item?.category);
     // Additional mockup selection logic will be added here
     await wait(2000); // Wait for mockup grid to fully load
     await handleModalButton(page, "continue");
@@ -3779,11 +3650,46 @@ async function deleteProduct(page, templateTitle) {
       throw error;
     }
 }
+async function loopFunction(page, data) {
+    if (!data || !Array.isArray(data)) {
+        console.log("No data provided or data is not an array");
+        return;
+    }
 
+    try {
+        // Process items sequentially using for...of loop
+        for (const item of data) {
+            const dateTime = new Date();
+            console.log(item, dateTime.toLocaleTimeString());
+            
+            try {
+                await navigateToCatalog(page, item?.catalogue);
+                await wait(2000);
+                // await navigateToStore(page, item?.store);
+                await navigateToTemplate(page);
+                await wait(1000);
+                await handleTemplateActions(page, item?.templateName);
+                await wait(2000);
+                await handleMockupSelection(page, "flat");
+                await wait(2000);
+                await handleProductDetails(page, item);
+                await wait(2000);
+                
+                console.log(`Completed processing item: ${item?.title}`);
+            } catch (error) {
+                console.error(`Error processing item: ${item?.title}`, error);
+                throw error;
+            }
+        }
+    } catch (error) {
+        console.error("Error in loopFunction:", error);
+        throw error;
+    }
+}
 
 async function test(  email,
   password,
-  catalogueName,
+  catelogueName,
   templateName,
   imageId,
   title,
@@ -3796,13 +3702,12 @@ async function test(  email,
     // await wait(2000);
     // await selectProduct(page, templateTitle);
     await wait(2000);
-    await navigateToCatalog(page, catalogueName,imageId);
-    // await wait(2000);
-    await wait(3000);
+    // await loopFunction(page,data)
+    await navigateToCatalog(page, catelogueName);
+    await wait(2000);
+    // await navigateToStore(page, item?.store);
     await navigateToTemplate(page);
     await wait(1000);
-    console.log("template actions");
-    
     await handleTemplateActions(page, templateName);
     await wait(2000);
     await handleMockupSelection(page, "flat");
@@ -3812,22 +3717,23 @@ async function test(  email,
     
     await deleteTemplate(page);
     await wait(2000);
-    await browser.close()
-    
+    // await navigateToStore(page, "anxil's Store");
+    // await wait(2000);
+    // await deleteProduct(page, templateTitle);
+    console.log("automation finished");
+    await browser.close();
     // Additional workflow steps...
   } catch (error) {
+    await browser.close();
     console.error("An error occurred during the process:", error);
     throw error;
   }
 }
-// await navigateToStore(page, "anxil's Store");
-// await wait(2000);
-// await deleteProduct(page, templateTitle);
 app.post("/getData", async (req, res) => {
   const {
     email,
     password,
-    catalogueName,
+    catelogueName,
     templateName,
     imageId,
     title,
@@ -3845,7 +3751,7 @@ app.post("/getData", async (req, res) => {
     await test(
       email,
       password,
-      catalogueName,
+      catelogueName,
       templateName,
       imageId,
       title,
