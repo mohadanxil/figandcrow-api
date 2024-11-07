@@ -17,9 +17,13 @@ const SELECTORS = {
   },
   NAVIGATION: {
     STORES: 'li.sidebar__item:has(a[aria-label="Stores"]) a',
+    // CATALOG: 'a.sidebar__link[href="/dashboard/custom-products"]',
     CATALOG: 'li.sidebar__item:has(a[aria-label="Product catalog"]) a',
+    // PRODUCT_TEMPLATES: 'a.sidebar__link[href="/dashboard/product-templates"]',
     PRODUCT_TEMPLATES:
       'li.sidebar__item:has(a[aria-label="Product templates"]) a',
+    // PRODUCT_TEMPLATES:
+    //   'li.sidebar__item:has(a[aria-label="Product templates"]) a',
   },
   STORE: {
     CONTAINER: ".pf-cards.my-stores",
@@ -41,6 +45,7 @@ const SELECTORS = {
     GRID: ".product-template-items--grid",
     GRID_ITEM: ".product-template-items--grid .product-template-item",
     LINK: "a.product-template-link",
+    // SIDEBAR_LINK: 'a.sidebar__link[href="/dashboard/product-templates"]',
     SIDEBAR_LINK: 'li.sidebar__item:has(a[aria-label="Product templates"]) a',
     ADD_TO_STORE: 'button[data-test="product-templates-item-add-to-store"]',
     IMAGE:
@@ -157,10 +162,10 @@ async function initializeBrowser() {
 }
 
 async function ensureClickable(page, selector, timeout = 10000) {
-  await page.waitForSelector(selector, {
-    visible: true,
-    timeout,
-  });
+  // await page.waitForSelector(selector, {
+  //   visible: true,
+  //   timeout,
+  // });
 
   const element = await page.$(selector);
   if (!element) {
@@ -242,39 +247,54 @@ async function verifyLoginSuccess(page) {
 
   return true;
 }
-async function retry(fn, verifyFn, maxAttempts = 5) {
+async function retry(fn, verifyFn, maxAttempts = 5, arg="") {
   let lastError;
-  
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-          // Execute the main function
-          const response = await fn();
-          
-          // If verification function exists, wait for it to pass
-          if (verifyFn) {
-              const isSuccess = await verifyFn(response);
-              if (!isSuccess) {
-                  throw new Error(`Verification failed on attempt ${attempt}`);
-              }
-              console.log(`Verification successful on attempt ${attempt}`);
-          }
-          
-          return response;
-      } catch (error) {
-          lastError = error;
-          console.log(`Attempt ${attempt}/${maxAttempts} failed: ${error.message}`);
-          
-          // On last attempt, throw the error
-          if (attempt === maxAttempts) {
-              break;
-          }
-          
-          // Exponential backoff with some randomization
-          const delay = Math.min(1000 * Math.pow(2, attempt - 1) + Math.random() * 1000, 10000);
-          await new Promise(resolve => setTimeout(resolve, delay));
+    try {
+      // Execute the main function
+      let response;
+      let success;
+      if(arg){
+        response = await fn(arg);
       }
+      else{
+        response = await fn();
+      }
+
+      // If verification function exists, wait for it to pass
+      if (verifyFn) {
+        if(arg){
+          isSuccess = await verifyFn(response, arg);
+        }
+        else{
+          isSuccess = await verifyFn(response);
+
+        }
+        console.log(isSuccess, "isSuccess");
+
+        if (!isSuccess) {
+          throw new Error(`Verification failed on attempt ${attempt}`);
+        }
+        console.log(`Verification successful on attempt ${attempt}`);
+      }
+
+      return response;
+    } catch (error) {
+      lastError = error;
+      console.log(`Attempt ${attempt}/${maxAttempts} failed: ${error.message}`);
+
+      // On last attempt, throw the error
+      if (attempt === maxAttempts) {
+        break;
+      }
+
+      // Exponential backoff with some randomization
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1) + Math.random() * 1000, 10000);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
   }
-  
+
   throw new Error(`Failed after ${maxAttempts} attempts. Last error: ${lastError.message}`);
 }
 async function handleCookiePopup(page) {
@@ -300,6 +320,263 @@ async function handleCookiePopup(page) {
   }
 }
 
+// async function login(page, email, password) {
+//   try {
+//     // Navigate to login page
+//     await retry(
+//       async () => {
+//         await page.goto("https://www.printful.com/auth/login");
+//       },
+//       async () => {
+//         return await page.evaluate(() => {
+//           return window.location.href.includes("/auth/login");
+//         });
+//       }
+//     );
+
+//     // Handle cookie popup without retrying
+//     await handleCookiePopup(page);
+
+//     // Fill email - with clickable verification
+//     await retry(
+//       async () => {
+//         const emailField = await ensureClickable(page, SELECTORS.LOGIN.EMAIL);
+//         await emailField.type(email);
+//       },
+//       async () => {
+//         const emailValue = await page.$eval(
+//           SELECTORS.LOGIN.EMAIL,
+//           (el) => el.value
+//         );
+//         return emailValue === email;
+//       }
+//     );
+
+//     // Fill password - with clickable verification
+//     await retry(
+//       async () => {
+//         const passwordField = await ensureClickable(
+//           page,
+//           SELECTORS.LOGIN.PASSWORD
+//         );
+//         await passwordField.type(password);
+//       },
+//       async () => {
+//         const passwordValue = await page.$eval(
+//           SELECTORS.LOGIN.PASSWORD,
+//           (el) => el.value.length > 0
+//         );
+//         return passwordValue;
+//       }
+//     );
+//     // Submit form and handle reCAPTCHA
+//     await retry(
+//       async () => {
+//         const submitButton = await ensureClickable(page, SELECTORS.LOGIN.SUBMIT);
+        
+//         // First, just click the submit button
+//         await submitButton.click();
+
+//         // Wait for reCAPTCHA to appear (if it does)
+//         try {
+//           await page.waitForSelector('#grecaptcha-service-element', { timeout: 5000 });
+//           console.log('reCAPTCHA detected, waiting for completion...');
+//           const data = await page.waitForSelector('#grecaptcha-service-element', { timeout: 5000 });
+//           console.log(data,"data thing");
+          
+//           // If reCAPTCHA appeared, wait for it to be resolved
+//           await page.waitForFunction(() => {
+//             const recaptcha = document.querySelector('#grecaptcha-service-element');
+//             console.log(recaptcha,"recaptcha");
+            
+//             return !recaptcha || recaptcha.style.display === 'none';
+//           }, { timeout: 60000 }); // Increased timeout for reCAPTCHA resolution
+          
+//           console.log('reCAPTCHA resolved, waiting for navigation...');
+//         } catch (err) {
+//           // If waitForSelector times out, it means no reCAPTCHA appeared
+//           console.log('No reCAPTCHA detected, proceeding with navigation...');
+//         }
+
+//         // Now wait for navigation to complete
+//         await page.waitForNavigation({ 
+//           waitUntil: 'networkidle0',
+//           timeout: 30000 
+//         });
+
+//         // Verify we're logged in
+//         const success = await verifyLoginSuccess(page);
+//         if (!success) {
+//           throw new Error('Login verification failed');
+//         }
+//       },
+//       async () => {
+//         // Only return true if we're successfully logged in
+//         return await verifyLoginSuccess(page);
+//       },
+//       10 // Increased delay between retries
+//     );
+//   } catch (error) {
+//     console.error("Login failed:", error.message);
+//     throw error;
+//   }
+// }
+// async function login(page, email, password) {
+//   try {
+//     // Navigate to login page
+//     await retry(
+//       async () => {
+//         await page.goto("https://www.printful.com/auth/login");
+//       },
+//       async () => {
+//         return await page.evaluate(() => {
+//           return window.location.href.includes("/auth/login");
+//         });
+//       }
+//     );
+
+//     // Handle cookie popup without retrying
+//     await handleCookiePopup(page);
+
+//     // Fill email - with clickable verification
+//     await retry(
+//       async () => {
+//         const emailField = await ensureClickable(page, SELECTORS.LOGIN.EMAIL);
+//         await emailField.type(email);
+//       },
+//       async () => {
+//         const emailValue = await page.$eval(
+//           SELECTORS.LOGIN.EMAIL,
+//           (el) => el.value
+//         );
+//         return emailValue === email;
+//       }
+//     );
+
+//     // Fill password - with clickable verification
+//     await retry(
+//       async () => {
+//         const passwordField = await ensureClickable(
+//           page,
+//           SELECTORS.LOGIN.PASSWORD
+//         );
+//         await passwordField.type(password);
+//       },
+//       async () => {
+//         const passwordValue = await page.$eval(
+//           SELECTORS.LOGIN.PASSWORD,
+//           (el) => el.value.length > 0
+//         );
+//         return passwordValue;
+//       }
+//     );
+
+//     // Submit form and handle reCAPTCHA
+//     // let isLoggedIn = false;
+//     await retry(
+//       async () => {
+//         // Assuming you're using JavaScript with Puppeteer or similar in a Node.js environment
+
+// const iframeElement = await page.frames().find(frame => frame.url().includes('recaptcha/api2/bframe'));
+// if (iframeElement) {
+//     const element = await iframeElement.$('#rc-imageselect');
+//     if (element) {
+//         console.log("Element with ID 'rc-imageselect' is present inside the iframe.");
+//     } else {
+//         console.log("Element with ID 'rc-imageselect' is not found.");
+//     }
+// } else {
+//     console.log("reCAPTCHA iframe not found.");
+// }
+
+//         const submitButton = await ensureClickable(page, SELECTORS.LOGIN.SUBMIT);
+        
+//         // Click the submit button
+//         await submitButton.click();
+//         // Assuming you're using JavaScript with Puppeteer or similar in a Node.js environment
+
+// // const iframeElement = await page.frames().find(frame => frame.url().includes('recaptcha/api2/bframe'));
+// if (iframeElement) {
+//     const element = await iframeElement.$('#rc-imageselect');
+//     console.log(iframeElement,"iframeElement");
+//     console.log("------------------------------------------------------------------------------------------------------");
+    
+//     console.log(element,"element");
+    
+//     if (element) {
+//         console.log("1 Element with ID 'rc-imageselect' is present inside the iframe.");
+//     } else {
+//         console.log("1 Element with ID 'rc-imageselect' is not found.");
+//     }
+// } else {
+//     console.log("reCAPTCHA iframe not found. 2");
+// }
+
+//         console.log('Submit button clicked');
+
+//         // Wait for either navigation or reCAPTCHA
+//         // try {
+//         //   // Set up a navigation promise
+//         //   const navigationPromise = page.waitForNavigation({ 
+//         //     waitUntil: 'networkidle0',
+//         //     timeout: 5000 // Short timeout to quickly check if we navigate
+//         //   });
+
+//         //   // Set up a reCAPTCHA detection promise
+//         //   const recaptchaPromise = page.waitForSelector('#grecaptcha-service-element', { 
+//         //     timeout: 5000 
+//         //   });
+
+//         //   // Race between navigation and reCAPTCHA detection
+//         //   const result = await Promise.race([
+//         //     navigationPromise.then(() => 'navigation'),
+//         //     recaptchaPromise.then(() => 'captcha')
+//         //   ]);
+
+//         //   if (result === 'navigation') {
+            
+//         //     console.log('Immediate navigation detected');
+//         //     isLoggedIn = true;
+//         //   } else {
+//         //     console.log(result);
+//         //     console.log('reCAPTCHA detected, waiting for resolution...');
+            
+//         //     // Wait for reCAPTCHA to be resolved and navigation to complete
+//         //     await Promise.all([
+//         //       page.waitForFunction(() => {
+//         //         const recaptcha = document.querySelector('#grecaptcha-service-element');
+//         //         return !recaptcha || recaptcha.style.display === 'none';
+//         //       }, { timeout: 90000 }), // Long timeout for manual CAPTCHA solving
+//         //       page.waitForNavigation({ 
+//         //         waitUntil: 'networkidle0',
+//         //         timeout: 90000 
+//         //       })
+//         //     ]);
+            
+//         //     console.log('reCAPTCHA resolved and navigation completed');
+//         //     isLoggedIn = true;
+//         //   }
+//         // } catch (error) {
+//         //   console.log('Error during login process:', error.message);
+//         //   throw error;
+//         // }
+
+//         // Final verification
+//         const success = await verifyLoginSuccess(page);
+//         if (!success) {
+//           throw new Error('Login verification failed');
+//         }
+//       },
+//       async () => {
+//         return await verifyLoginSuccess(page);
+//       },
+//       10
+//     );
+//   } catch (error) {
+//     console.error("Login failed:", error.message);
+//     throw error;
+//   }
+// }
 async function login(page, email, password) {
   try {
     // Navigate to login page
@@ -350,46 +627,47 @@ async function login(page, email, password) {
       }
     );
 
-    // Submit form and wait for navigation - with enhanced click verification
-    // await retry(
-    //     async () => {
-    //         const submitButton = await ensureClickable(page, SELECTORS.LOGIN.SUBMIT);
-    //         await Promise.all([
-    //             submitButton.click(),
-    //             page.waitForNavigation({ waitUntil: 'networkidle0' })
-    //         ]);
-    //     },
-    //     async () => {
-    //         // Verify we're no longer on the login page
-    //         const currentUrl = await page.evaluate(() => window.location.href);
-    //         const isLoginPage = currentUrl.includes('/auth/login');
-
-    //         // Check for common login error indicators
-    //         const hasErrors = await page.evaluate(() => {
-    //             const errorElements = document.querySelectorAll('.error-message, .alert-error');
-    //             return errorElements.length === 0;
-    //         });
-
-    //         return !isLoginPage && hasErrors;
-    //     }
-    // );
+    // Submit form and handle reCAPTCHA
+    // Submit form and wait for reCAPTCHA to be solved
     await retry(
       async () => {
-        const submitButton = await ensureClickable(
-          page,
-          SELECTORS.LOGIN.SUBMIT
-        );
-        await Promise.all([
-          submitButton.click(),
-          page.waitForNavigation({ waitUntil: "networkidle0" }),
-        ]);
-        // Add the verification step
-        await verifyLoginSuccess(page);
+        const iframeElement = await page.frames().find(frame => frame.url().includes('recaptcha/api2/bframe'));
+        if (iframeElement) {
+          const element = await iframeElement.$('#rc-imageselect');
+          if (element) {
+            console.log("Element with ID 'rc-imageselect' is present inside the iframe.");
+            // Wait indefinitely for the user to solve the reCAPTCHA
+            await page.waitForFunction(() => {
+              const recaptcha = document.querySelector('#rc-imageselect');
+              return !recaptcha || recaptcha.style.display === 'none';
+            }, { timeout: 0 });
+          } else {
+            console.log("Element with ID 'rc-imageselect' is not found.");
+          }
+        } else {
+          console.log("reCAPTCHA iframe not found.");
+        }
+
+        const submitButton = await ensureClickable(page, SELECTORS.LOGIN.SUBMIT);
+        await submitButton.click();
+        console.log('Submit button clicked');
+
+        // Wait for navigation to complete
+        await page.waitForNavigation({ 
+          waitUntil: 'networkidle0',
+          timeout: 0 // No timeout, wait indefinitely
+        });
+
+        // Final verification
+        const success = await verifyLoginSuccess(page);
+        if (!success) {
+          throw new Error('Login verification failed');
+        }
       },
       async () => {
-        // Double-check login status after retry
         return await verifyLoginSuccess(page);
-      }
+      },
+      10
     );
   } catch (error) {
     console.error("Login failed:", error.message);
@@ -397,262 +675,7 @@ async function login(page, email, password) {
   }
 }
 
-// Navigation Store
-async function navigateToStore(page, storeName) {
-    try {
-      // Click on stores navigation with retry
-      await retry(
-        async () => {
-          const storesNavButton = await ensureClickable(page, SELECTORS.NAVIGATION.STORES);
-          await storesNavButton.click();
-          await wait(3000); // Wait for navigation/animation
-        },
-        async () => {
-          // Verify that the stores page has loaded
-          const storeCards = await page.$$(SELECTORS.STORE.CARD);
-          return storeCards.length > 0;
-        }
-      );
-  
-      // Find and click the correct store card
-      await retry(
-        async () => {
-          const targetStore = await findStoreCard(page, storeName);
-          if (!targetStore) {
-              const storesNavButton = await ensureClickable(page, SELECTORS.NAVIGATION.STORES);
-              await storesNavButton.click();
-              await wait(3000); 
-              throw new Error(`Store "${storeName}" not found in the list`);
-          }
-  
-          const viewStoreButton = await targetStore.$(SELECTORS.STORE.VIEW_BUTTON);
-          if (!viewStoreButton) {
-            throw new Error(`View button not found for store "${storeName}"`);
-          }
-  
-          await viewStoreButton.click();
-          await page.waitForNavigation({ waitUntil: "networkidle0" });
-          await verifyStoreNavigation(page,storeName);
-        },
-        async () => {
-            const verficationStatus = await verifyStoreNavigation(page,storeName);
-            return verficationStatus;
-        }
-      );
-  
-    //   return true;
-    } catch (error) {
-      console.error("Store navigation failed:", error.message);
-      throw error;
-    }
-}
-// async function clickUploadButton(page, selector = '.product-push__droparea__pulse') {
-//     await wait(2000);
-//     // const methods = [
-//     //     // Method 1: Direct button click with wait for modal
-//     //     async () => {
-//     //         await page.waitForSelector(selector, { visible: true, timeout: 5000 });
-//     //         await page.click(selector);
-//     //         // Wait for modal to appear
-//     //         await page.waitForSelector('.modal-dialog.modal-lg', { visible: true, timeout: 5000 });
-//     //     },
-
-//     //     // Method 2: Click button content
-//     //     async () => {
-//     //         await page.evaluate(() => {
-//     //             const buttonContent = document.querySelector('.product-push__droparea__pulse');
-//     //             if (buttonContent) {
-//     //                 buttonContent.click();
-//     //             }
-//     //         });
-//     //         // Wait for file library
-//     //         await page.waitForSelector('.file-library.dropzone', { visible: true, timeout: 5000 });
-//     //     },
-
-//     //     // Method 3: JavaScript click with overlay removal
-//     //     async () => {
-//     //         await page.evaluate(() => {
-//     //             const pulse = document.querySelector('.product-push__droparea__pulse');
-//     //             if (pulse) pulse.remove();
-//     //             document.querySelector('.product-push__droparea button').click();
-//     //         });
-//     //         // Wait for modal content
-//     //         await page.waitForSelector('.modal-content.modal-rounded', { visible: true, timeout: 5000 });
-//     //     },
-
-//     //     // Method 4: Click with visibility ensure
-//     //     async () => {
-//     //         await page.evaluate((selector) => {
-//     //             const element = document.querySelector(selector);
-//     //             if (element) {
-//     //                 element.style.opacity = '1';
-//     //                 element.style.visibility = 'visible';
-//     //                 element.style.display = 'block';
-//     //                 element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-//     //                 element.click();
-//     //             }
-//     //         }, selector);
-//     //         // Wait for search row
-//     //         await page.waitForSelector('.file-library__search.row', { visible: true, timeout: 5000 });
-//     //     }
-//     // ];
-
-//     // let lastError = null;
-    
-//     // Try each method until one succeeds
-//     // for (let i = 0; i < methods.length; i++) {
-//     //     try {
-//     //         await methods[i]();
-//     //         console.log(`Successfully clicked using method ${i + 1}`);
-            
-//     //         // Verify modal is open by checking multiple selectors
-//     //         const modalVisible = await page.evaluate(() => {
-//     //             return !!(
-//     //                 document.querySelector('.modal-dialog.modal-lg') &&
-//     //                 document.querySelector('.modal-content.modal-rounded') &&
-//     //                 document.querySelector('.file-library.dropzone')
-//     //             );
-//     //         });
-
-//     //         if (modalVisible) {
-//     //             console.log('Successfully opened Printful file library modal');
-//     //             return true;
-//     //         }
-            
-//     //         console.log('Method did not trigger modal, trying next method...');
-            
-//     //     } catch (error) {
-//     //         console.log(`Method ${i + 1} failed: ${error.message}`);
-//     //         lastError = error;
-//     //         await wait(500);
-//     //     }
-//     // }
-
-//     // throw new Error(`Failed to open file library modal after all attempts. Last error: ${lastError.message}`);
-//     // async () => {
-//                 await page.evaluate(() => {
-//                     const buttonContent = document.querySelector('.product-push__droparea__pulse');
-//                     if (buttonContent) {
-//                         buttonContent.click();
-//                     }
-//                 });
-//                 // Wait for file library
-//         //         await page.waitForSelector('.file-library.dropzone', { visible: true, timeout: 5000 });
-//         //     },
-// }
-
-// async function navigateToCatalog(page, storeName) {
-//     try {
-//       // Click on stores navigation with retry
-//     //   await retry(
-//     //     async () => {
-//           const storesNavButton = await ensureClickable(page, SELECTORS.NAVIGATION.CATALOG);
-//           await storesNavButton.click();
-//         //   await page.waitForNavigation()
-//           await wait(5000); // Wait for navigation/animation
-//     //     },
-//     //     async () => {
-//     //       // Verify that the stores page has loaded
-//     //       const storeCards = await page.$$(SELECTORS.STORE.CARD);
-//     //       return storeCards.length > 0;
-//     //     }
-//     //   );
-  
-//       // Find and click the correct store card
-//     //   await retry(
-//     //     async () => {
-//     //       const targetStore = await findStoreCard(page, storeName);
-//     //       if (!targetStore) {
-//     //           const storesNavButton = await ensureClickable(page, SELECTORS.NAVIGATION.STORES);
-//     //           await storesNavButton.click();
-//     //           await wait(3000); 
-//     //           throw new Error(`Store "${storeName}" not found in the list`);
-//     //       }
-  
-//     //       const viewStoreButton = await targetStore.$(SELECTORS.STORE.VIEW_BUTTON);
-//     //       if (!viewStoreButton) {
-//     //         throw new Error(`View button not found for store "${storeName}"`);
-//     //       }
-  
-//     //       await viewStoreButton.click();
-//     //       await page.waitForNavigation({ waitUntil: "networkidle0" });
-//     //       await verifyStoreNavigation(page,storeName);
-//     //     },
-//     //     async () => {
-//     //         const verficationStatus = await verifyStoreNavigation(page,storeName);
-//     //         return verficationStatus;
-//     //     }
-//     //   );
-//     await page.type("#sitewide-search-input",storeName,{
-//         delay:50
-//     })
-//     await wait(3000);
-//     const searchedItems = await page.$$(".sitewide-search__item--product");
-//     console.log(searchedItems,"searchItems")  
-//     for (const item of searchedItems) {
-//         // const linkHandle = await item.$(SELECTORS.TEMPLATE.LINK);
-//         // if (linkHandle) {
-//         // const linkText = await page.evaluate((el) => el.textContent.trim(), linkHandle);
-//         // if (linkText === templateTitle) {
-//         //     return item;
-//         // }
-//         // }
-//         await item.click();
-//         await page.waitForNavigation();
-//         await wait(3000);
-//         try {
-            
-//         } catch (error) {
-            
-//         }
-//         await page.evaluate(() => {
-//             const buttonGroup = document.querySelector(".product-action-buttons__wrapper");
-//             if (buttonGroup) {
-//                 buttonGroup.scrollIntoView({
-//                 behavior: "smooth",
-//                 block: "center",
-//               });
-//             }
-//           });
-//         const buttons = await page.$$(".product-action-buttons__wrapper button");
-//         for(button of buttons){
-//             try {
-//                 const buttonText = await button.evaluate((el) => {
-//                     // Check for nested text content
-//                     const textContent = el.textContent.trim();
-//                     // Handle cases where text might be in nested elements
-//                     return textContent.replace(/\s+/g, " ").trim();
-//                 });
-//                 if(buttonText==="Create product template"){
-//                     await button.click();
-//                 }
-//             } catch (error) {
-                
-//             }
-//         }
-//         await wait(4000);
-//         // const ImageUpload = await page.$('.product-push__droparea button');
-//         // // await ImageUpload.click();
-//         // await page.click('.product-push__droparea button')
-//         // await page.click(item)
-//         // await clickUploadButton(page);  
-//     //    await clickUploadButton(page);
-//             // if (result instanceof FileChooser) {
-//             //     // If a file chooser was returned, use it
-//             //     await result.accept(['path/to/your/file.jpg']);
-//             // }
-//         // } catch (error) {
-//         //     console.error('Failed to handle upload:', error);
-//         //     // Handle failure appropriately
-//         // }
-//     }
-//     //   return true;
-//     } catch (error) {
-//       console.error("Store navigation failed:", error.message);
-//       throw error;
-//     }
-// }
-async function clickUploadButton(page, selector = '.product-push__droparea button',imageId) {
+async function clickUploadButton(page, selector = '.product-push__droparea button',imageId,searchTerm) {
     const methods = [
         // Method 1: Standard click with wait
         async () => {
@@ -746,7 +769,10 @@ async function clickUploadButton(page, selector = '.product-push__droparea butto
                 
                 // Wait a moment to check if the custom UI appears
                 await wait(1000);
-                await selectAndApplyMedia(page,imageId);
+                // if(searchTerm==="Women's Cropped Sweatshirt | Bella + Canvas 7503"){
+                //   await browserSet(page);
+                // }
+                await selectAndApplyMedia(page,imageId,searchTerm);
                 await wait(1000);
                 await browserSet(page);
                 // if(returnedImage){
@@ -791,367 +817,91 @@ async function clickUploadButton(page, selector = '.product-push__droparea butto
     //     throw new Error(`Failed to click upload button after all attempts. Last error: ${lastError.message}`);
     // }
 }
-// async function navigateToCatalog(page, storeName) {
-//     try {
-//         const storesNavButton = await ensureClickable(page, SELECTORS.NAVIGATION.CATALOG);
-//         await storesNavButton.click();
-//         await wait(5000);
+async function selectAllSizes(page) {
+  try {
+    // Wait for the size picker container to be present
+    await page.waitForSelector(".size-picker");
 
-//         await page.type("#sitewide-search-input", storeName, {
-//             delay: 50
-//         });
-//         await wait(3000);
-        
-//         const searchedItems = await page.$$(".sitewide-search__item--product");
-//         console.log(searchedItems, "searchItems");
+    // Get all checkbox inputs
+    const checkboxes = await page.$$(".size-picker .pf-custom-control-input");
+    console.log(`Found ${checkboxes.length} size checkboxes`);
 
-//         for (const item of searchedItems) {
-//             await item.click();
-//             await page.waitForNavigation();
-//             await wait(3000);
+    // Loop through each checkbox
+    for (const checkbox of checkboxes) {
+      await retry(
+        async () => {
+          // Get the size label for logging
+          const sizeLabel = await checkbox.evaluate((el) =>
+            el
+              .closest(".pf-custom-checkbox")
+              .querySelector(".pf-custom-control-label")
+              .textContent.trim()
+          );
+          console.log(`Selecting size: ${sizeLabel}`);
 
-//             await page.evaluate(() => {
-//                 const buttonGroup = document.querySelector(".product-action-buttons__wrapper");
-//                 if (buttonGroup) {
-//                     buttonGroup.scrollIntoView({
-//                         behavior: "smooth",
-//                         block: "center",
-//                     });
-//                 }
-//             });
+          // Ensure the checkbox is in view
+          await checkbox.evaluate((el) => {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+          });
 
-//             // const buttons = await page.$$(".product-action-buttons__wrapper button");
-//             // for (const button of buttons) {
-//             //     try {
-//             //         const buttonText = await button.evaluate((el) => {
-//             //             return el.textContent.trim().replace(/\s+/g, " ");
-//             //         });
-//             //         if (buttonText === "Create product template") {
-//             //             await button.click();
-//             //             await wait(4000);
-                        
-//             //             // Prevent default file input behavior before clicking upload button
-//             //             await page.evaluate(() => {
-//             //                 // Remove any existing file input event listeners
-//             //                 const originalAddEventListener = Element.prototype.addEventListener;
-//             //                 Element.prototype.addEventListener = function (type, listener, options) {
-//             //                     if (type === 'click' && this.classList.contains('product-push__droparea')) {
-//             //                         return; // Don't add click listeners for this element
-//             //                     }
-//             //                     originalAddEventListener.call(this, type, listener, options);
-//             //                 };
-                            
-//             //                 // Disable any file inputs
-//             //                 const fileInputs = document.querySelectorAll('input[type="file"]');
-//             //                 fileInputs.forEach(input => {
-//             //                     input.disabled = true;
-//             //                 });
-//             //             });
-                        
-//             //             // Now try to click the upload button
-//             //             await clickUploadButton(page);
-//             //         }
-//             //     } catch (error) {
-//             //         console.error("Error processing button:", error);
-//             //     }
-//             // }
-//             await page.setDefaultNavigationTimeout(0);
-//             await page._client().send('Page.setInterceptFileChooser', {enabled: false});
-//             // OR use this alternative method
-//             await page.evaluate(() => {
-//                 window.addEventListener('beforeunload', (e) => {
-//                     e.preventDefault();
-//                     e.returnValue = '';
-//                 });
-//             });
-    
-//             const buttons = await page.$$(".product-action-buttons__wrapper button");
-//             for (const button of buttons) {
-//                 try {
-//                     const buttonText = await button.evaluate((el) => {
-//                         return el.textContent.trim().replace(/\s+/g, " ");
-//                     });
-//                     if (buttonText === "Create product template") {
-//                         await button.click();
-//                         await wait(4000);
-//                         await clickUploadButton(page);
-//                     }
-//                 } catch (error) {
-//                     console.error("Error processing button:", error);
-//                 }
-//             }
-//         }
-//     } catch (error) {
-//         console.error("Store navigation failed:", error.message);
-//         throw error;
-//     }
-// }
+          // Wait a brief moment for scroll to complete
+          await wait(100);
 
-// async function clickUploadButton(page, selector = '.product-push__droparea button') {
-//     const methods = [
-//         // Method 1: Click with event prevention
-//         async () => {
-//             await page.evaluate(() => {
-//                 const button = document.querySelector('.product-push__droparea button');
-//                 // Remove any click event listeners
-//                 const clone = button.cloneNode(true);
-//                 button.parentNode.replaceChild(clone, button);
-                
-//                 // Trigger a custom event instead
-//                 const event = new CustomEvent('customClick', {
-//                     bubbles: true,
-//                     cancelable: true
-//                 });
-//                 clone.dispatchEvent(event);
-//             });
-//         },
+          // Click the checkbox
+          await checkbox.click();
 
-//         // Method 2: Direct DOM manipulation
-//         async () => {
-//             await page.evaluate(() => {
-//                 const container = document.querySelector('.product-push__droparea');
-//                 container.dispatchEvent(new MouseEvent('mousedown', {
-//                     bubbles: true,
-//                     cancelable: true,
-//                     view: window
-//                 }));
-//             });
-//         },
+          // Wait for any potential animations or state changes
+          await wait(100);
+        },
+        async () => {
+          // Verify the checkbox was actually checked
+          const isChecked = await checkbox.evaluate((el) => el.checked);
 
-//         // Method 3: Trigger modal directly
-//         async () => {
-//             await page.evaluate(() => {
-//                 // This depends on Printful's implementation
-//                 // You might need to adjust this based on their actual code
-//                 if (window.PrintfulImagePicker && typeof window.PrintfulImagePicker.open === 'function') {
-//                     window.PrintfulImagePicker.open();
-//                 }
-//             });
-//         }
-//     ];
+          // Get the size label for logging
+          const sizeLabel = await checkbox.evaluate((el) =>
+            el
+              .closest(".pf-custom-checkbox")
+              .querySelector(".pf-custom-control-label")
+              .textContent.trim()
+          );
 
-//     let lastError = null;
-    
-//     for (let i = 0; i < methods.length; i++) {
-//         try {
-//             await methods[i]();
-//             await wait(1000);
-            
-//             // Check if modal opened
-//             const modalVisible = await page.evaluate(() => {
-//                 return !!(
-//                     document.querySelector('.modal-dialog.modal-lg') &&
-//                     document.querySelector('.modal-content.modal-rounded') &&
-//                     document.querySelector('.file-library.dropzone')
-//                 );
-//             });
+          if (isChecked) {
+            console.log(`Successfully selected size: ${sizeLabel}`);
+          } else {
+            console.log(`Failed to select size: ${sizeLabel}`);
+          }
 
-//             if (modalVisible) {
-//                 console.log(`Successfully opened modal using method ${i + 1}`);
-//                 return true;
-//             }
-//         } catch (error) {
-//             console.log(`Method ${i + 1} failed: ${error.message}`);
-//             lastError = error;
-//             await wait(500);
-//         }
-//     }
+          return isChecked;
+        }
+      );
+    }
 
-//     throw new Error(`Failed to open modal after all attempts. Last error: ${lastError.message}`);
-// }
-// async function navigateToCatalog(page, searchTerm) {
-//     console.log(searchTerm)
-//     try {
-//         const storesNavButton = await ensureClickable(page, SELECTORS.NAVIGATION.CATALOG);
-//         await storesNavButton.click();
-//         await wait(5000);
+    // Final verification that all sizes are selected
+    const totalSelected = await page.evaluate(() => {
+      const checkedBoxes = document.querySelectorAll(
+        ".size-picker .pf-custom-control-input:checked"
+      );
+      return checkedBoxes.length;
+    });
 
-//         await page.type("#sitewide-search-input", searchTerm, {
-//             delay: 10
-//         });
-//         await wait(3000);
-        
-//         const searchedItems = await page.$$(".sitewide-search__item--product");
-//         console.log(searchedItems, "searchItems");
-
-//         for (const item of searchedItems) {
-//             await item.click();
-//             await page.waitForNavigation();
-//             await wait(3000);
-
-//             await page.evaluate(() => {
-//                 const buttonGroup = document.querySelector(".product-action-buttons__wrapper");
-//                 if (buttonGroup) {
-//                     buttonGroup.scrollIntoView({
-//                         behavior: "smooth",
-//                         block: "center",
-//                     });
-//                 }
-//             });
-
-//             const buttons = await page.$$(".product-action-buttons__wrapper button");
-//             for (const button of buttons) {
-//                 try {
-//                     const buttonText = await button.evaluate((el) => {
-//                         return el.textContent.trim().replace(/\s+/g, " ");
-//                     });
-//                     if (buttonText === "Create product template") {
-//                         await button.click();
-//                         await wait(4000);
-                        
-//                         // Prevent default file input behavior before clicking upload button
-//                         await page.evaluate(() => {
-//                             // Remove any existing file input event listeners
-//                             const originalAddEventListener = Element.prototype.addEventListener;
-//                             Element.prototype.addEventListener = function (type, listener, options) {
-//                                 if (type === 'click' && this.classList.contains('product-push__droparea')) {
-//                                     return; // Don't add click listeners for this element
-//                                 }
-//                                 originalAddEventListener.call(this, type, listener, options);
-//                             };
-                            
-//                             // Disable any file inputs
-//                             const fileInputs = document.querySelectorAll('input[type="file"]');
-//                             fileInputs.forEach(input => {
-//                                 input.disabled = true;
-//                             });
-//                         });
-                        
-//                         // Now try to click the upload button
-//                         await clickUploadButton(page);
-//                         await handleModalButton(page,"saveTemplate")
-//                     }
-//                 } catch (error) {
-//                     console.error("Error processing button:", error);
-//                 }
-//             }
-//         }
-//     } catch (error) {
-//         console.error("Store navigation failed:", error.message);
-//         throw error;
-//     }
-// }
-// async function getImageFromGallery(page,fileName) {
-//     // const item = page.$("#file-library-list");
-//     // await page.evaluate((el) => {
-//     //     el.scrollIntoView({ behavior: "smooth", block: "center" });
-//     // }, item);
-//     const templateItems = await page.$$('.file-library__file-listing-item');
-//     console.log(templateItems,"templateItems");
-    
-//     for (const item of templateItems) {
-//          await page.evaluate((el) => {
-//             el.scrollIntoView({ behavior: "smooth", block: "center" });
-//         }, item);
-//         console.log(item)
-//         const handle = await item.$('.pf-ui-caption');
-//         const linkText = await page.evaluate((el) => el.textContent.trim(), handle);
-//         console.log(linkText,"linkText");
-//         if(linkText===fileName){
-            
-//         }
-//          // Scroll into view if needed
-
-//          await wait(1000);
-//         //  await page.waitForFunction(
-//         //    (button) => !button.disabled,
-//         //    {},
-//         //    item
-//         //  );
-//         // const linkHandle = await item.$(SELECTORS.TEMPLATE.LINK);
-//         // if (linkHandle) {
-//         // const linkText = await page.evaluate((el) => el.textContent.trim(), linkHandle);
-//         // if (linkText === templateTitle) {
-//         //     return item;
-//         // }
-//         // }
-//         console.log(item);
-        
-//     }
-//     return null;
-// }
-// async function searchMediaGrid(page, fileName) {
-//     try {
-//         // First, wait for the grid container to be present
-//         await page.waitForSelector('#file-library-list');
-        
-//         // Ensure we're looking at the grid view, not the recent items
-//         // Scroll to the grid section
-//         await page.evaluate(() => {
-//             const gridSection = document.querySelector('#file-library-list');
-//             gridSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-//         });
-        
-//         // Wait a bit for the scroll to complete and items to load
-//         await wait(1000);
-        
-//         // Get all media items in the grid view specifically
-//         // Exclude items from the recently viewed section
-//         const mediaItems = await page.$$('#file-library-list .file-library__file-listing-item:not([data-test="file-library-recently-viewed"] *)');
-        
-//         console.log(`Found ${mediaItems.length} items in the grid`);
-        
-//         // Iterate through each media item
-//         for (const item of mediaItems) {
-//             // Scroll each item into view for better visibility and interaction
-//             await page.evaluate((el) => {
-//                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-//             }, item);
-            
-//             // Wait for any lazy-loading to complete
-//             await wait(2000);
-            
-//             // Get the caption/filename element
-//             const captionHandle = await item.$('.pf-ui-caption');
-//             if (!captionHandle) {
-//                 console.log('Caption element not found for item');
-//                 continue;
-//             }
-            
-//             // Get the text content
-//             const itemText = await page.evaluate(el => el.textContent.trim(), captionHandle);
-//             console.log('Found item:', itemText);
-            
-//             // Check if this is the file we're looking for
-//             if (itemText === fileName) {
-//                 console.log('Found matching file:', fileName);
-//                 const libraryItemWrapper = await item.$('.pf-library-item__wrapper');
-//                 if (libraryItemWrapper) {
-//                     // Hover over the item
-//                     await libraryItemWrapper.hover();
-                    
-//                     // Wait for the overlay with the Apply button to appear
-//                     await page.waitForSelector('.pf-library-item__overlay', { visible: true });
-                    
-//                     // Find and click the Apply button in the overlay
-//                     // Looking for both desktop and mobile versions of the Apply button
-//                     const applyButton = await item.$('.pf-library-item__overlay .pf-btn-secondary:not(.pf-btn-square):not(.dropdown-toggle)');
-                    
-//                     if (applyButton) {
-//                         await applyButton.click();
-//                         console.log('Successfully clicked Apply button');
-//                         return true;
-//                     } else {
-//                         console.error('Apply button not found in overlay');
-//                         return false;
-//                     }
-//                 } else {
-//                     console.error('Could not find library item wrapper for hovering');
-//                     return false;
-//                 }
-//             }
-//         }
-        
-//         console.log('File not found:', fileName);
-//         return null;
-        
-//     } catch (error) {
-//         console.error('Error searching media grid:', error);
-//         throw error;
-//     }
-// }
+    console.log(`Total sizes selected: ${totalSelected}`);
+    return totalSelected;
+  } catch (error) {
+    console.error("Error in selectAllSizes:", error);
+    throw error;
+  }
+}
 async function navigateToCatalog(page, searchTerm, imageId) {
     console.log(`Navigating to catalog with search term: ${searchTerm}`);
+    if (!page) {
+      throw new Error('Page object is required');
+    }
+    
+    // Provide default values and validate searchTerm
+    if (!searchTerm || typeof searchTerm !== 'string') {
+        console.warn('Invalid or missing searchTerm:', searchTerm);
+        searchTerm = ''; // Set default empty string instead of undefined
+    }
     try {
         // Navigate to catalog
         await retry(
@@ -1234,7 +984,26 @@ async function navigateToCatalog(page, searchTerm, imageId) {
                   }
               );
               console.log(inputValue, "inputValue");
-              return inputValue === searchTerm;
+              if(inputValue===searchTerm){
+                return true;
+              }
+              else{
+                await retry(
+                  async () => {
+                      const storesNavButton = await ensureClickable(page, SELECTORS.NAVIGATION.CATALOG);
+                      await storesNavButton.click();
+                      await page.waitForNavigation();
+                  },
+                  async () => {
+                      // Verify we're on the catalog page
+                      return await page.evaluate(() => {
+                          console.log(window.location.href,"window.location.href")
+                          return window.location.href.includes("/custom-products");
+                      });
+                  }
+              );
+              }
+              // return inputValue === searchTerm;
           },
           7 // Increased max attempts for search
       );
@@ -1251,7 +1020,7 @@ async function navigateToCatalog(page, searchTerm, imageId) {
               // Implement infinite scroll handling
               let previousHeight;
               let scrollAttempts = 0;
-              const maxScrollAttempts = 5;
+              const maxScrollAttempts = 100;
 
               while (scrollAttempts < maxScrollAttempts) {
                   previousHeight = await page.evaluate('document.body.scrollHeight');
@@ -1276,7 +1045,7 @@ async function navigateToCatalog(page, searchTerm, imageId) {
           async () => {
               const searchedItems = await page.$$(".sitewide-search__item--product");
               const itemCount = searchedItems.length;
-              console.log(`Found ${itemCount} search results`);
+              console.log(`Found ${itemCount} search results catalogue`);
               return itemCount > 0;
           },
           5 // Max attempts for getting search results
@@ -1322,7 +1091,30 @@ async function navigateToCatalog(page, searchTerm, imageId) {
           );
           
     
-
+            if(searchTerm==="Unisex Staple T-Shirt | Bella + Canvas 3001"){
+              const client = await page.target().createCDPSession();
+              await client.send("Emulation.setDeviceMetricsOverride", {
+                width: 850,
+                height: 667,
+                deviceScaleFactor: 1,
+                mobile: true,
+              });
+               // Toggle mobile emulation using Chrome DevTools keyboard shortcut
+            await page.evaluate(() => {
+              // Simulate pressing Ctrl+Shift+M (Cmd+Shift+M on Mac)
+              const event = new KeyboardEvent("keydown", {
+                key: "M",
+                code: "KeyM",
+                ctrlKey: true,
+                shiftKey: true,
+                bubbles: true,
+              });
+              document.dispatchEvent(event);
+            });
+          
+            console.log("DevTools opened in responsive mode");
+          
+            }
             // Scroll to button group
             await retry(
                 async () => {
@@ -1364,10 +1156,16 @@ async function navigateToCatalog(page, searchTerm, imageId) {
                         const buttonText = await button.evaluate(el => 
                             el.textContent.trim().replace(/\s+/g, " ")
                         );
+                        console.log(buttonText,"buttonText");
+                        
                         if (buttonText === "Create product template") {
                             templateButton = button;
                             break;
                         }
+                        // else (buttonText === "Create product template"){
+                        //   templateButton = button;
+                        //   break;
+                        // }
                     }
                     if (!templateButton) {
                         throw new Error("Create product template button not found");
@@ -1382,7 +1180,9 @@ async function navigateToCatalog(page, searchTerm, imageId) {
                 }
             );
             console.log("prevent default file input");
-            
+            if(searchTerm==="Unisex Staple T-Shirt | Bella + Canvas 3001"){
+              await browserSet(page);
+            }
             // Prevent default file input behavior
             await retry(
                 async () => {
@@ -1414,8 +1214,45 @@ async function navigateToCatalog(page, searchTerm, imageId) {
             // Click upload button and handle modal
             await retry(
                 async () => {
-                    await clickUploadButton(page,'.product-push__droparea button',imageId);
-                    await handleModalButton(page, "saveTemplate");
+                    // await selectAllSizes(page);
+                    await clickUploadButton(page,'.product-push__droparea button',imageId,searchTerm);
+                    // /product-templates
+                    await retry(
+                      async()=>{
+                        // await handleModalButton(page, "proceed");
+                        // await handleModalButton(page, "mockup-selection");
+                        // await handleModalButton(page, "submit");
+                        const data = await page.evaluate(() => {
+                          return document.querySelector('#dashboard-content-container') !== null;
+                      });
+                      console.log(data,"data from query");
+                      if(!data){
+                        if(searchTerm==="Women's Cropped Sweatshirt | Bella + Canvas 7503"){
+                          await handleModalButton(page, "continuecatalogue");
+                          await wait(2000);
+                          await handleModalButton(page, "saveTemplate");
+                          // await wait()
+                          await browserSet(page)
+                        }
+                        else{
+                          console.log("reached here");
+                          
+                          await handleModalButton(page, "saveTemplate");
+                        }
+                      }
+                        await wait(1000);
+                      },
+                      async()=>{
+                        console.log("proceed retry");
+                        // return await page.evaluate(() => {
+                        //   console.log(window.location.href,"window.location.href.includes")
+                        //   return window.location.href.includes("/product-templates");
+                        // });
+                        return await page.evaluate(() => {
+                          return document.querySelector('#dashboard-content-container') !== null;
+                      });
+                      }
+                    )
                 },
                 async () => {
                     // Verify the modal is closed
@@ -1424,55 +1261,383 @@ async function navigateToCatalog(page, searchTerm, imageId) {
                     });
                 }
             );
+            await wait(30000);
             console.log("Successfully navigated to product page");
-             break; // Break after first successful navigation
+            break; // Break after first successful navigation
             // await navigateToTemplate(page)
             
         }
     } catch (error) {
-        console.error("Store navigation failed:", error.message);
-        throw error;
+        console.error("catalogue navigation failed:", error.message);
+        // throw error;
+        await navigateToCatalog(page, searchTerm, imageId);
     }
 }
-async function retryClick(page, selector, maxAttempts = 3, timeout = 1000) {
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-            console.log(`Attempt ${attempt} to click ${selector}`);
-            
-            // Wait for element to be visible
-            await page.waitForSelector(selector, { visible: true, timeout });
-            
-            // Try different click methods
-            try {
-                // Method 1: Direct click
-                await page.click(selector);
-            } catch (e) {
-                // Method 2: JavaScript click
-                await page.evaluate((sel) => {
-                    const element = document.querySelector(sel);
-                    if (element) element.click();
-                }, selector);
-            }
-            
-            // Verify if click was successful (you might need to adjust this based on your UI feedback)
-            await wait(500);
-            return true;
-            
-        } catch (error) {
-            console.log(`Click attempt ${attempt} failed:`, error.message);
-            if (attempt === maxAttempts) {
-                throw new Error(`Failed to click ${selector} after ${maxAttempts} attempts`);
-            }
-            // Wait before retry
-            await wait(1000);
-        }
-    }
-    return false;
-}
+// async function navigateToCatalog(page, searchTerm, imageId) {
+//     console.log(`Navigating to catalog with search term: ${searchTerm}`);
+//     try {
+//         // Navigate to catalog
+//         await retry(
+//             async () => {
+//                 const storesNavButton = await ensureClickable(page, SELECTORS.NAVIGATION.CATALOG);
+//                 await storesNavButton.click();
+//                 await page.waitForNavigation();
+//             },
+//             async () => {
+//                 // Verify we're on the catalog page
+//                 return await page.evaluate(() => {
+//                     console.log(window.location.href,"window.location.href")
+//                     return window.location.href.includes("/custom-products");
+//                 });
+//             }
+//         );
+//         // Scroll to top before searching
+//         await page.evaluate(() => {
+//           window.scrollTo({ top: 0, behavior: 'smooth' });
+//       });
+//       await wait(1000);
 
-async function tryApplyButton(page, item, maxAttempts = 3) {
+//       // Search for item with improved handling
+//       await retry(
+//           async () => {
+//               // Wait for search input and ensure it's visible
+//               const searchInput = await page.waitForSelector("#sitewide-search-input", {
+//                   visible: true,
+//                   timeout: 10000
+//               });
+
+//               // Scroll element into view if needed
+//               await page.evaluate(() => {
+//                   const searchInput = document.querySelector("#sitewide-search-input");
+//                   const rect = searchInput.getBoundingClientRect();
+//                   const isVisible = (
+//                       rect.top >= 0 &&
+//                       rect.left >= 0 &&
+//                       rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+//                       rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+//                   );
+                  
+//                   if (!isVisible) {
+//                       searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+//                   }
+//               });
+//               await wait(1000);
+
+//               // Clear input using multiple methods for reliability
+//               await page.evaluate(() => {
+//                   const searchInput = document.querySelector("#sitewide-search-input");
+//                   searchInput.value = "";
+//                   searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+//               });
+              
+//               // Focus the input
+//               await searchInput.click({ clickCount: 3 }); // Triple click to select all
+//               await page.keyboard.press('Backspace');
+              
+//               // Type the search term with increased delay
+//               await page.type("#sitewide-search-input", searchTerm, { delay: 50 });
+              
+//               // Ensure the input event is fired
+//               await page.evaluate((term) => {
+//                   const searchInput = document.querySelector("#sitewide-search-input");
+//                   searchInput.value = term;
+//                   searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+//                   searchInput.dispatchEvent(new Event('change', { bubbles: true }));
+//               }, searchTerm);
+
+//               await wait(2000);
+//           },
+//           async () => {
+//               // Verify the search input has the correct value
+//               const inputValue = await page.$eval(
+//                   "#sitewide-search-input",
+//                   (el) => {
+//                       console.log(el.value, "el.value");
+//                       return el.value;
+//                   }
+//               );
+//               console.log(inputValue, "inputValue");
+//               if(inputValue===searchTerm){
+//                 return true;
+//               }
+//               else{
+//                 await retry(
+//                   async () => {
+//                       const storesNavButton = await ensureClickable(page, SELECTORS.NAVIGATION.CATALOG);
+//                       await storesNavButton.click();
+//                       await page.waitForNavigation();
+//                   },
+//                   async () => {
+//                       // Verify we're on the catalog page
+//                       return await page.evaluate(() => {
+//                           console.log(window.location.href,"window.location.href")
+//                           return window.location.href.includes("/custom-products");
+//                       });
+//                   }
+//               );
+//               }
+//               // return inputValue === searchTerm;
+//           },
+//           7 // Increased max attempts for search
+//       );
+
+//       // Wait for and verify search results with scroll handling
+//       await retry(
+//           async () => {
+//               // First wait for any search results
+//               await page.waitForSelector(".sitewide-search__item--product", {
+//                   visible: true,
+//                   timeout: 15000
+//               });
+
+//               // Implement infinite scroll handling
+//               let previousHeight;
+//               let scrollAttempts = 0;
+//               const maxScrollAttempts = 100;
+
+//               while (scrollAttempts < maxScrollAttempts) {
+//                   previousHeight = await page.evaluate('document.body.scrollHeight');
+                  
+//                   await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
+//                   await wait(2000); // Wait for potential new items to load
+                  
+//                   const currentHeight = await page.evaluate('document.body.scrollHeight');
+//                   if (currentHeight === previousHeight) {
+//                       scrollAttempts++;
+//                   } else {
+//                       scrollAttempts = 0; // Reset counter if we found new content
+//                   }
+
+//                   // Check if we have enough items
+//                   const itemCount = await page.$$eval(".sitewide-search__item--product", items => items.length);
+//                   if (itemCount > 0) {
+//                       break; // Exit if we have results
+//                   }
+//               }
+//           },
+//           async () => {
+//               const searchedItems = await page.$$(".sitewide-search__item--product");
+//               const itemCount = searchedItems.length;
+//               console.log(`Found ${itemCount} search results catalogue`);
+//               return itemCount > 0;
+//           },
+//           5 // Max attempts for getting search results
+//       );
+
+//       // Add a final scroll back to top
+//       await page.evaluate(() => {
+//           window.scrollTo({ top: 0, behavior: 'smooth' });
+//       });
+//       await wait(1000);
+
+//         // Get all search results
+//         const searchedItems = await page.$$(".sitewide-search__item--product");
+//         console.log(searchedItems);
+        
+//         // Process each search result
+//         for (const item of searchedItems) {
+//           await retry(
+//               async () => {
+//                   // Store the href before clicking
+//                   const href = await page.evaluate(element => {
+//                       const link = element.querySelector('a') || element;
+//                       return link.href;
+//                   }, item);
+
+//                   // Click and wait for navigation
+//                   await Promise.all([
+//                       page.waitForNavigation({ 
+//                           waitUntil: 'networkidle0',
+//                           timeout: 30000 
+//                       }),
+//                       item.click()
+//                   ]);
+
+//                   return href; // Return href for verification
+//               },
+//               async (href) => {
+//                   // Verify navigation using the stored href
+//                   await wait(2000); // Small delay to ensure page load
+//                   const currentUrl = await page.evaluate(() => window.location.href);
+//                   return currentUrl.includes("/custom/") || currentUrl === href;
+//               }
+//           );
+          
+    
+//             if(searchTerm==="Unisex Staple T-Shirt | Bella + Canvas 3001"){
+//               const client = await page.target().createCDPSession();
+//               await client.send("Emulation.setDeviceMetricsOverride", {
+//                 width: 850,
+//                 height: 667,
+//                 deviceScaleFactor: 1,
+//                 mobile: true,
+//               });
+//                // Toggle mobile emulation using Chrome DevTools keyboard shortcut
+//             await page.evaluate(() => {
+//               // Simulate pressing Ctrl+Shift+M (Cmd+Shift+M on Mac)
+//               const event = new KeyboardEvent("keydown", {
+//                 key: "M",
+//                 code: "KeyM",
+//                 ctrlKey: true,
+//                 shiftKey: true,
+//                 bubbles: true,
+//               });
+//               document.dispatchEvent(event);
+//             });
+          
+//             console.log("DevTools opened in responsive mode");
+          
+//             }
+//             // Scroll to button group
+//             await retry(
+//                 async () => {
+//                     await page.evaluate(() => {
+//                         const buttonGroup = document.querySelector(".product-action-buttons__wrapper");
+//                         if (buttonGroup) {
+//                             buttonGroup.scrollIntoView({
+//                                 behavior: "smooth",
+//                                 block: "center",
+//                             });
+//                         } else {
+//                             throw new Error("Button group not found");
+//                         }
+//                     });
+//                 },
+//                 async () => { 
+//                     // Verify button group is in viewport
+//                     return await page.evaluate(() => {
+//                         const buttonGroup = document.querySelector(".product-action-buttons__wrapper");
+//                         if (!buttonGroup) return false;
+//                         const rect = buttonGroup.getBoundingClientRect();
+//                         return (
+//                             rect.top >= 0 &&
+//                             rect.left >= 0 &&
+//                             rect.bottom <= window.innerHeight &&
+//                             rect.right <= window.innerWidth
+//                         );
+//                     });
+//                 }
+//             );
+//             console.log("create product template");
+            
+//             // Find and click "Create product template" button
+//             await retry(
+//                 async () => {
+//                     const buttons = await page.$$(".product-action-buttons__wrapper button");
+//                     let templateButton;
+//                     for (const button of buttons) {
+//                         const buttonText = await button.evaluate(el => 
+//                             el.textContent.trim().replace(/\s+/g, " ")
+//                         );
+//                         console.log(buttonText,"buttonText");
+                        
+//                         if (buttonText === "Create product template") {
+//                             templateButton = button;
+//                             break;
+//                         }
+//                         // else (buttonText === "Create product template"){
+//                         //   templateButton = button;
+//                         //   break;
+//                         // }
+//                     }
+//                     if (!templateButton) {
+//                         throw new Error("Create product template button not found");
+//                     }
+//                     await templateButton.click();
+//                 },
+//                 async () => {
+//                     // Verify the template creation modal is open
+//                     return await page.evaluate(() => {
+//                         return document.querySelector('.product-push__droparea') !== null;
+//                     });
+//                 }
+//             );
+//             console.log("prevent default file input");
+//             if(searchTerm==="Unisex Staple T-Shirt | Bella + Canvas 3001"){
+//               await browserSet(page);
+//             }
+//             // Prevent default file input behavior
+//             await retry(
+//                 async () => {
+//                     await page.evaluate(() => {
+//                         const originalAddEventListener = Element.prototype.addEventListener;
+//                         Element.prototype.addEventListener = function (type, listener, options) {
+//                             if (type === 'click' && this.classList.contains('product-push__droparea')) {
+//                                 return;
+//                             }
+//                             originalAddEventListener.call(this, type, listener, options);
+//                         };
+                        
+//                         const fileInputs = document.querySelectorAll('input[type="file"]');
+//                         fileInputs.forEach(input => {
+//                             input.disabled = true;
+//                         });
+//                     });
+//                 },
+//                 async () => {
+//                     // Verify file inputs are disabled
+//                     return await page.evaluate(() => {
+//                         const fileInputs = document.querySelectorAll('input[type="file"]');
+//                         return Array.from(fileInputs).every(input => input.disabled);
+//                     });
+//                 }
+//             );
+//             console.log("upload button clicking");
+            
+//             // Click upload button and handle modal
+//             await retry(
+//                 async () => {
+//                     await clickUploadButton(page,'.product-push__droparea button',imageId,searchTerm);
+//                     // /product-templates
+//                     await retry(
+//                       async()=>{
+//                         // await handleModalButton(page, "proceed");
+//                         // await handleModalButton(page, "mockup-selection");
+//                         // await handleModalButton(page, "submit");
+//                         const data = await page.evaluate(() => {
+//                           return document.querySelector('#dashboard-content-container') !== null;
+//                       });
+//                       console.log(data,"data from query");
+//                       if(!data){
+//                         await handleModalButton(page, "saveTemplate");
+//                       }
+//                         await wait(1000);
+//                       },
+//                       async()=>{
+//                         console.log("proceed retry");
+//                         // return await page.evaluate(() => {
+//                         //   console.log(window.location.href,"window.location.href.includes")
+//                         //   return window.location.href.includes("/product-templates");
+//                         // });
+//                         return await page.evaluate(() => {
+//                           return document.querySelector('#dashboard-content-container') !== null;
+//                       });
+//                       }
+//                     )
+//                 },
+//                 async () => {
+//                     // Verify the modal is closed
+//                     return await page.evaluate(() => {
+//                         return document.querySelector('.product-push__droparea') === null;
+//                     });
+//                 }
+//             );
+//             console.log("Successfully navigated to product page");
+//              break; // Break after first successful navigation
+//             // await navigateToTemplate(page)
+            
+//         }
+//     } catch (error) {
+//         console.error("Store navigation failed:", error.message);
+//         // throw error;
+//         await navigateToCatalog(page);
+//     }
+// }
+
+async function tryApplyButton(page, item, maxAttempts = 10,searchTerm) {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
+            
             console.log(`Attempt ${attempt} to click Apply button`);
             
             // Make sure item is in view
@@ -1480,7 +1645,7 @@ async function tryApplyButton(page, item, maxAttempts = 3) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, item);
             
-            await wait(500);
+            await wait(1000);
             
             // Hover over the item
             const libraryItemWrapper = await item.$('.pf-library-item__wrapper');
@@ -1490,9 +1655,9 @@ async function tryApplyButton(page, item, maxAttempts = 3) {
             }
             
             // Multiple hover attempts
-            for (let hoverAttempt = 1; hoverAttempt <= 3; hoverAttempt++) {
+            for (let hoverAttempt = 1; hoverAttempt <= 5; hoverAttempt++) {
                 await libraryItemWrapper.hover();
-                await wait(500);
+                await wait(1000);
                 
                 // Check if overlay appeared
                 const isOverlayVisible = await page.evaluate(() => {
@@ -1503,52 +1668,104 @@ async function tryApplyButton(page, item, maxAttempts = 3) {
                 if (isOverlayVisible) break;
                 console.log(`Hover attempt ${hoverAttempt} didn't show overlay, retrying...`);
             }
+            console.log(searchTerm,"searchTerm");
             
-            // Try clicking desktop version first
-            const desktopApplyButton = await item.$('.pf-library-item__overlay .pf-btn-secondary:not(.pf-btn-square):not(.dropdown-toggle)');
-            if (desktopApplyButton) {
-                // Try multiple click methods
-                try {
-                    await desktopApplyButton.click();
-                    console.log('Clicked desktop Apply button');
-                    return true;
-                } catch (e) {
-                    console.log('Direct click failed, trying alternative methods...');
-                    
-                    // Try JavaScript click
-                    await page.evaluate(button => {
-                        button.click();
-                    }, desktopApplyButton);
-                    
-                    // Try force click
-                    await page.evaluate(button => {
-                        const clickEvent = new MouseEvent('click', {
-                            view: window,
-                            bubbles: true,
-                            cancelable: true
-                        });
-                        button.dispatchEvent(clickEvent);
-                    }, desktopApplyButton);
-                }
-            }
-            
-            // If desktop version failed, try mobile version
-            const mobileApplyButton = await item.$('.pf-d-flex.pf-d-sm-none .pf-btn-secondary:not(.pf-btn-square)');
-            if (mobileApplyButton) {
-                try {
-                    await mobileApplyButton.click();
-                    console.log('Clicked mobile Apply button');
-                    return true;
-                } catch (e) {
-                    console.log('Mobile button click failed, trying alternative methods...');
-                    
-                    // Try JavaScript click for mobile
-                    await page.evaluate(button => {
-                        button.click();
-                    }, mobileApplyButton);
-                }
-            }
-            
+            // if(searchTerm==="Women's Cropped Sweatshirt | Bella + Canvas 7503"){
+            //   await browserSet(page);
+            // }
+            // if(searchTerm==="Women's Cropped Sweatshirt | Bella + Canvas 7503"){
+            //   const swipeContainers = await page.$$("#js--designer-left-sidebar-content .swipe-container");
+            //   console.log(swipeContainers,"swipeContainers")
+            // }
+            // else{
+              // Try clicking desktop version first
+              const desktopApplyButton = await item.$('.pf-library-item__overlay .pf-btn-secondary:not(.pf-btn-square):not(.dropdown-toggle)');
+              if (desktopApplyButton) {
+                  // Try multiple click methods
+                  try {
+                      await desktopApplyButton.click();
+                      console.log('Clicked desktop Apply button');
+                      return true;
+                  } catch (e) {
+                      console.log('Direct click failed, trying alternative methods...',e.message);
+                      
+                      // Try JavaScript click
+                      try {
+                        await page.evaluate(button => {
+                            button.click();
+                        }, desktopApplyButton);
+                      } catch (error) {
+                        // Try force click
+                        console.log("method 3 for product click");
+                        
+                        await page.evaluate(button => {
+                            const clickEvent = new MouseEvent('click', {
+                                view: window,
+                                bubbles: true,
+                                cancelable: true
+                            });
+                            button.dispatchEvent(clickEvent);
+                        }, desktopApplyButton);
+                      }
+                  }
+              }
+              
+              // If desktop version failed, try mobile version
+              const mobileApplyButton = await item.$('.pf-d-flex.pf-d-sm-none .pf-btn-secondary:not(.pf-btn-square)');
+              if (mobileApplyButton) {
+                  try {
+                      await mobileApplyButton.click();
+                      console.log('Clicked mobile Apply button');
+                      return true;
+                  } catch (e) {
+                      console.log('Mobile button click failed, trying alternative methods...');
+                      
+                      // Try JavaScript click for mobile
+                      await page.evaluate(button => {
+                          button.click();
+                      }, mobileApplyButton);
+                  }
+              }
+            // }
+            // if(searchTerm==="Women's Cropped Sweatshirt | Bella + Canvas 7503"){
+            //   const swipeContainers = await page.$$("#js--designer-left-sidebar-content .pf-position-relative");
+            //   // const swipeContainers = await page.$$("#js--designer-left-sidebar-content .");
+            //   console.log(swipeContainers,"swipeContainers2")
+            //   // const swipeContainers = await page.$$('.layer-item');
+
+            //   for (let i = 0; i < swipeContainers.length; i++) {
+            //       const layerItem = swipeContainers[i];
+            //     console.log(layerItem);
+                
+            //       // Skip the first item or any item with the "active" class
+            //       const isActive = await layerItem.evaluate((el) => el.classList.contains('active'));
+            //       console.log(isActive);
+                  
+            //       if (i === 0 || isActive) continue;
+
+            //       try {
+            //           // Find the dropdown toggle icon within the current layer item and click it
+            //           const dropdownToggle = await layerItem.$('.layer-item-controls-btn');
+            //           await dropdownToggle.click();
+
+            //           // Wait for the dropdown menu to appear
+            //           await page.waitForSelector('.dropdown-menu', { visible: true });
+
+            //           // Find and click the "Delete" button in the dropdown menu
+            //           const deleteButton = await page.evaluateHandle(
+            //               (item) => item.querySelector('.dropdown-menu .pf-cursor-pointer.pf-link.pf-ui-body').closest('a'),
+            //               layerItem
+            //           );
+            //           await deleteButton.click();
+
+            //           // Optional: Wait for the deletion to complete or for any confirmation
+            //           await wait(1000); // Adjust this timeout if needed
+
+            //       } catch (error) {
+            //           console.error("Error processing layer item:", error);
+            //       }
+            //   }
+            // }
         } catch (error) {
             console.log(`Apply button attempt ${attempt} failed:`, error.message);
             if (attempt === maxAttempts) {
@@ -1560,7 +1777,7 @@ async function tryApplyButton(page, item, maxAttempts = 3) {
     return false;
 }
 
-async function searchMediaGridAndApply(page, fileName, maxAttempts = 3) {
+async function searchMediaGridAndApply(page, fileName, maxAttempts = 3,searchTerm) {
     try {
         await page.waitForSelector('#file-library-list');
         
@@ -1592,7 +1809,7 @@ async function searchMediaGridAndApply(page, fileName, maxAttempts = 3) {
                 console.log('Found matching file:', fileName);
                 
                 // Try to click Apply button with retries
-                const success = await tryApplyButton(page, item, maxAttempts);
+                const success = await tryApplyButton(page, item, maxAttempts,searchTerm);
                 
                 if (success) {
                     console.log('Successfully clicked Apply button');
@@ -1609,6 +1826,7 @@ async function searchMediaGridAndApply(page, fileName, maxAttempts = 3) {
                     //     });
                     //     document.dispatchEvent(event);
                     // });
+                    await browserSet(page);
                     return true;
                 } else {
                     console.error('Failed to click Apply button after all attempts');
@@ -1627,16 +1845,18 @@ async function searchMediaGridAndApply(page, fileName, maxAttempts = 3) {
 }
 
 // Usage example:
-async function selectAndApplyMedia(page, fileName) {
+async function selectAndApplyMedia(page, fileName,searchTerm) {
     await wait(2000);
-    
+    // if(searchTerm==="Women's Cropped Sweatshirt | Bella + Canvas 7503"){
+    //   await browserSet(page);
+    // }
     let success = false;
     const maxRetries = 3;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             console.log(`Attempt ${attempt} to find and apply media`);
-            success = await searchMediaGridAndApply(page, fileName);
+            success = await searchMediaGridAndApply(page, fileName,10,searchTerm);
             if (success) break;
         } catch (error) {
             console.error(`Attempt ${attempt} failed:`, error);
@@ -1653,207 +1873,6 @@ async function selectAndApplyMedia(page, fileName) {
         console.log('Failed to find or apply the media item after all attempts');
     }
 }
-async function findStoreCard(page, storeName) {
-const storeCards = await page.$$(SELECTORS.STORE.CARD);
-for (const card of storeCards) {
-    const titleHandle = await card.$(SELECTORS.STORE.TITLE);
-    if (titleHandle) {
-    const storeTitle = await page.evaluate(el => el.textContent.trim(), titleHandle);
-    console.log(storeTitle,"storeTitle");
-    if (storeTitle === storeName) {
-        return card;
-    }
-    }
-}
-return null;
-}
-
-async function verifyStoreNavigation(page, storeName) {
-    // await wait(4000)
-    const titleHandle = await page.$('.product-push__store-name');
-    const storeTitle = await page.evaluate(el => el.textContent.trim(), titleHandle);
-    console.log(storeTitle,"storeTitle3");
-
-    if (storeTitle) {
-        // const storeTitle = await page.evaluate(el => el.textContent.trim(), titleHandle);
-        console.log(storeTitle, "storeTitle4", storeTitle === storeName);
-        return storeTitle === storeName;
-    }
-    return false;
-}
-
-
-// Select Product
-async function selectProduct(page, templateTitle) {
-    try {
-      // Navigate to product list and verify it's loaded
-      await retry(
-        async () => {
-          await page.waitForSelector(SELECTORS.PRODUCT.LIST, { visible: true });
-          const ProductTableHeader = await page.$(SELECTORS.PRODUCT.HEADER);
-          await page.evaluate((el) => {
-            el.scrollIntoView({ behavior: "smooth", block: "center" });
-          }, ProductTableHeader);
-        },
-        async () => {
-          const productRows = await page.$$(SELECTORS.PRODUCT.ROW);
-          return productRows.length > 0;
-        }
-      );
-  
-      // Find and verify the correct product row
-      const targetRow = await retry(
-        async () => {
-          return await findProductRow(page, templateTitle);
-        },
-        async (row) => {
-            // const row = await findProductRow(page, templateTitle);
-            console.log(row,"from async retry");
-            if (!row) return false;
-            const titleHandle = await row.$(SELECTORS.PRODUCT.TITLE);
-            const productTitle = await page.evaluate(
-            (el) => el.textContent.trim(),
-            titleHandle
-            );
-            return productTitle === templateTitle;
-        }
-      );
-  
-      if (!targetRow) {
-        throw new Error(`Product "${templateTitle}" not found in list`);
-      }
-  
-      // Select the checkbox with verification
-      await retry(
-        async () => {
-          await selectProductCheckbox(page, targetRow);
-        },
-        async () => {
-          const checkbox = await targetRow.$(SELECTORS.PRODUCT.CHECKBOX);
-          return await page.evaluate((el) => el.checked, checkbox);
-        }
-      );
-  
-      // Click save button and handle modal
-      await retry(
-        async () => {
-          await handleSaveTemplate(page);
-        },
-        async () => {
-          // Verify the modal is no longer visible (indicating successful save);
-          await wait(2000);
-            await page.waitForSelector('.alternative__status-message--success', {
-                visible: true,
-                timeout: 5000,
-            })
-            const handleStatus = await page.$('.alternative__status-message--success');
-            if(handleStatus){
-                const statusMessage = await page.evaluate(el => el.textContent.trim(), handleStatus);            
-                return statusMessage.includes("created");
-            }
-            // const modalVisible = await page.evaluate(() => {
-            //     const modal = document.querySelector('.alternative__status-message--success');
-            //     console.log(modal);
-            // //     return modal && window.getComputedStyle(modal).display !== 'none';
-            // });
-            // <div data-test="success-UdXnr8tIYRLKWO5" class="alternative__status-message alternative__status-message--success">Product template created!</div>
-        }
-      );
-  
-      return true;
-    } catch (error) {
-      console.error("Error in selectProduct:", error);
-      throw error;
-    }
-}
-
-async function findProductRow(page, templateTitle) {
-const productRows = await page.$$(SELECTORS.PRODUCT.ROW);
-
-for (const row of productRows) {
-    const titleHandle = await row.$(SELECTORS.PRODUCT.TITLE);
-    if (!titleHandle) continue;
-
-    const productTitle = await page.evaluate(
-    (el) => el.textContent.trim(),
-    titleHandle
-    );
-
-    if (productTitle === templateTitle) {
-    await page.evaluate((el) => {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, row);
-    await wait(1000);
-    
-    return row;
-    }
-}
-return null;
-}
-
-async function selectProductCheckbox(page, row) {
-const checkbox = await row.$(SELECTORS.PRODUCT.CHECKBOX);
-if (!checkbox) {
-    throw new Error("Checkbox not found for matching product");
-}
-
-// Verify checkbox is clickable
-const isClickable = await page.evaluate((el) => {
-    const style = window.getComputedStyle(el);
-    const rect = el.getBoundingClientRect();
-    return (
-    style.display !== "none" &&
-    style.visibility !== "hidden" &&
-    style.opacity !== "0" &&
-    rect.width > 0 &&
-    rect.height > 0 &&
-    !el.disabled
-    );
-}, checkbox);
-
-if (!isClickable) {
-    throw new Error("Checkbox is not clickable");
-}
-
-// Try multiple click methods
-try {
-    await checkbox.click({ delay: 100 });
-} catch (clickError) {
-    try {
-    await page.evaluate((el) => el.click(), checkbox);
-    } catch (evalClickError) {
-    await page.evaluate((el) => {
-        const rect = el.getBoundingClientRect();
-        const event = new MouseEvent("click", {
-        view: window,
-        bubbles: true,
-        cancelable: true,
-        clientX: rect.left + rect.width / 2,
-        clientY: rect.top + rect.height / 2,
-        });
-        el.dispatchEvent(event);
-    }, checkbox);
-    }
-}
-}
-
-async function handleSaveTemplate(page) {
-// Click the save button
-const saveButton = await ensureClickable(page, "#create-product-templates");
-await saveButton.click();
-
-// Wait for and handle modal
-await page.waitForSelector("#create-product-templates-disclaimer-modal", {
-    visible: true,
-    timeout: 5000,
-});
-
-await wait(1000);
-
-const modalSaveButton = await ensureClickable(page, ".modal-footer .pf-btn-primary");
-await modalSaveButton.click();
-}
-
 
 // Navigate to template
 // async function navigateToTemplate(page) {
@@ -1905,7 +1924,7 @@ async function findAndClickWixStore(page) {
                 await wait(1000);
                 
                 // Get the background image URL
-                const backgroundImageUrl = await item.$eval('.square-box', el => {
+                const backgroundImageUrl = await item.$eval('.square-box.pf-rounded', el => {
                     const style = window.getComputedStyle(el);
                     const backgroundImage = style.backgroundImage;
                     // Extract URL from the background-image property
@@ -2149,30 +2168,7 @@ async function navigateToTemplate(page) {
   }
 }
 
-// Helper function to safely check if an element exists and is visible
-async function isElementVisible(page, selector, timeout = 5000) {
-    try {
-        await page.waitForSelector(selector, {
-            state: 'visible',
-            timeout
-        });
-        
-        const isVisible = await page.evaluate((sel) => {
-            const element = document.querySelector(sel);
-            if (!element) return false;
-            
-            const style = window.getComputedStyle(element);
-            return style.display !== 'none' && 
-                   style.visibility !== 'hidden' && 
-                   style.opacity !== '0';
-        }, selector);
-        
-        return isVisible;
-    } catch (error) {
-        return false;
-    }
-}
-async function handleTemplateActions(page, templateTitle) {
+async function handleTemplateActions(page, templateTitle,catalogueName,imageId) {
   console.log("enter action template");
   
     try {
@@ -2198,7 +2194,8 @@ async function handleTemplateActions(page, templateTitle) {
           
           const targetTemplate = await findTemplate(page, templateTitle);
           if (!targetTemplate) {
-            throw new Error(`Template "${templateTitle}" not found in the list`);
+            // throw new Error(`Template "${templateTitle}" not found in the list`);
+            await navigateToCatalog(page,catalogueName,imageId)
           }
   
           const linkHandle = await targetTemplate.$(SELECTORS.TEMPLATE.LINK);
@@ -2247,7 +2244,19 @@ async function handleTemplateActions(page, templateTitle) {
       await selectWixStore(page);
       // Handle the modal
       await wait(2000);
-      await handleModalButton(page, "proceed");
+      await retry(
+        async()=>{
+          await handleModalButton(page, "proceed");
+          await wait(1000);
+        },
+        async()=>{
+          console.log("proceed retry");
+          
+          return await page.evaluate(() => {
+            return document.querySelector('.mockup-type-picker-panel') !== null && document.querySelector('.product-template-details-editor') === null;
+        });
+        }
+      )
       await wait(2000);
   
       return true;
@@ -2277,22 +2286,22 @@ if (linkHandle) {
 return null;
 }
 
-async function handleModalButton(page, buttonText) {
-const modalButtonSelector = `.modal-footer .pf-btn:contains("${buttonText}")`;
-await retry(
-    async () => {
-    const modalButton = await ensureClickable(page, modalButtonSelector);
-    await modalButton.click();
-    },
-    async () => {
-    const modalVisible = await page.evaluate(() => {
-        const modal = document.querySelector("#create-product-templates-disclaimer-modal");
-        return modal && window.getComputedStyle(modal).display === "none";
-    });
-    return modalVisible;
-    }
-);
-}
+// async function handleModalButton(page, buttonText) {
+// const modalButtonSelector = `.modal-footer .pf-btn:contains("${buttonText}")`;
+// await retry(
+//     async () => {
+//     const modalButton = await ensureClickable(page, modalButtonSelector);
+//     await modalButton.click();
+//     },
+//     async () => {
+//     const modalVisible = await page.evaluate(() => {
+//         const modal = document.querySelector("#create-product-templates-disclaimer-modal");
+//         return modal && window.getComputedStyle(modal).display === "none";
+//     });
+//     return modalVisible;
+//     }
+// );
+// }
 // async function handleTemplateActions(page, templateTitle) {
 //     await page.waitForSelector(SELECTORS.TEMPLATE.GRID_ITEM, {
 //       timeout: 10000,
@@ -2498,28 +2507,224 @@ async function processModalButtons(page, buttonText) {
   }
 }
 async function handleModalButton(page, buttonType) {
+  // const buttonMap = {
+  //   proceed: "Proceed to mockups",
+  //   back: "Back",
+  //   done: "Done",
+  //   save: "Save as template",
+  //   savetemplate: "Save product template",
+  //   "product save": "Save product",
+  //   submit:'Submit to store',
+  //   continue: "Continue",
+  // };
   const buttonMap = {
-    proceed: "Proceed to mockups",
-    back: "Back",
-    done: "Done",
-    save: "Save as template",
-    savetemplate: "Save product template",
-    "product save": "Save product",
-    submit:'Submit to store',
-    continue: "Continue",
-  };
+        back: "Back",
+        done: "Done",
+        save: "Save as template",
+        savetemplate: "Save product template",
+        
+        "product save": "Save product",
+        
+        proceed: "Proceed to mockups",
+        submit: 'Submit to store',
+        "mockup-selection": "Continue",
+        "continuecatalogue": "Continue",
+        "mockup-selection": "Continue",
+        "detail-continue": "Continue",
+      };
+  const tab = {
+    // "Proceed to mockups": "Product",
+    "Proceed to mockups": "Design",
+    "Done": "Mockups",
+    "Save as template": "Details",
+    "Save product template": "Pricing",
+    "Save product": "Save product",
+    'Submit to store':'Submit to store',
+    "Continue": "Continue",
+  }
 
   const buttonText = buttonMap[buttonType.toLowerCase()];
   if (!buttonText) {
     throw new Error(`Unknown button type: ${buttonType}`);
   }
+  // await retry(
 
-  return await processModalButtons(page, buttonText);
+  //   async()=>{
+  await processModalButtons(page, buttonText);
+    // },
+    // async()=>{
+    //   if(buttonText==="Proceed to mockups"){
+
+    //   }
+    // }
+  // )
 }
 
 
 
 // Mockup Selection
+// async function handleModalButton(page, buttonType) {
+//   const buttonMap = {
+//     back: "Back",
+//     done: "Done",
+//     save: "Save as template",
+//     savetemplate: "Save product template",
+    
+//     "product save": "Save product",
+    
+//     proceed: "Proceed to mockups",
+//     submit: 'Submit to store',
+//     "mockup-selection": "Continue",
+//     "detail-continue": "Continue",
+//   };
+//   const tab = {
+//     "Proceed to mockups": "Mockups",
+//     "Done": "Mockups",
+//     "Save as template": "Details",
+//     "Save product template": "Pricing",
+//     "Save product": "Save product",
+//     'Submit to store': 'Submit to store',
+//     "Continue": "Continue",
+//   };
+
+//   const buttonText = buttonMap[buttonType.toLowerCase()];
+//   if (!buttonText) {
+//     throw new Error(`Unknown button type: ${buttonType}`);
+//   }
+//   console.log(buttonText,"button text");
+  
+
+//   await retry(
+//     async (type) => {
+//       await processModalButtons(page, buttonText);
+//     },
+//     async (response, text) => {
+//       // if (buttonText === "Proceed to mockups") {
+//       //   // Update the active tab to "Mockups"
+//       //   page.locator(`a[id="progress-step-3"]`).add("data-active", "true");
+//       //   page.locator(`a[id="progress-step-2"]`).add("data-done", "true");
+//       // }
+//       // else if (buttonType === "mockup-selection") {
+//       //   // Update the active tab to "Mockups"
+//       //   page.locator(`a[id="progress-step-4"]`).add("data-active", "true");
+//       //   page.locator(`a[id="progress-step-3"]`).add("data-done", "true");
+//       // }
+//       // else if (buttonType === "detail-continue") {
+//       //   // Update the active tab to "Mockups"
+//       //   page.locator(`a[id="progress-step-5"]`).add("data-active", "true");
+//       //   page.locator(`a[id="progress-step-4"]`).add("data-done", "true");
+//       // }
+//       // if (buttonType === "submit") {
+//       //   // Update the active tab to "Mockups"
+//       //   page.locator(`a[id="progress-step-5"]`).add("data-active", "true");
+//       //   page.locator(`a[id="progress-step-4"]`).add("data-done", "true");
+//       // }
+//       // console.log(response,text,"buttonType buttonText");
+//       // const activeTabs = await page.$$eval(`a[id^="progress-step-"][data-active="true"]`, (elements) => elements.length);
+//       // const doneTabs = await page.$$eval(`a[id^="progress-step-"][data-done="true"]`, (elements) => elements.length);
+
+//       // console.log(activeTabs,doneTabs,"activeTabs,doneTabs");
+//       // if (text === "proceed") {
+//       //   const activeTabs = await page.$$eval(`a[id^="progress-step-"][data-active="true"]`, (elements) => elements.length);
+//       // const doneTabs = await page.$$eval(`a[id^="progress-step-"][data-done="true"]`, (elements) => elements.length);
+
+//       // console.log(activeTabs,doneTabs,"activeTabs,doneTabs2");
+      
+//       //   // Check the current state of the tabs
+//       //   const activeTabIndex = await page.locator(`a[id^="progress-step-"]`).evaluateAll((elements) => {
+//       //     return elements.findIndex((el) => el.getAttribute('data-active') === 'true');
+//       //   });
+//       //   const doneTabIndex = await page.locator(`a[id^="progress-step-"]`).evaluateAll((elements) => {
+//       //     return elements.reverse().findIndex((el) => el.getAttribute('data-done') === 'true');
+//       //   });
+//       //   console.log(activeTabIndex,doneTabIndex);
+        
+//       //   // Update the tabs if they are not in the expected state
+//       //   if (activeTabIndex === 3 || doneTabIndex === 2) {
+//       //     return true
+//       //   }
+//       //   else{
+//       //     return false
+//       //   }
+//       // }
+//       // else if (text === "mockup-selection") {
+//       //   // Check the current state of the tabs
+//       //   const activeTabIndex = await page.locator(`a[id^="progress-step-"]`).evaluateAll((elements) => {
+//       //     return elements.findIndex((el) => el.getAttribute('data-active') === 'true');
+//       //   });
+//       //   const doneTabIndex = await page.locator(`a[id^="progress-step-"]`).evaluateAll((elements) => {
+//       //     return elements.reverse().findIndex((el) => el.getAttribute('data-done') === 'true');
+//       //   });
+
+//       //   // Update the tabs if they are not in the expected state
+//       //   if (activeTabIndex === 4 || doneTabIndex === 3) {
+//       //     return true
+//       //   }
+//       //   else{
+//       //     return false
+//       //   }
+//       // }
+//       // else if (text === "detail-continue") {
+//       //   // Check the current state of the tabs
+//       //   const activeTabIndex = await page.locator(`a[id^="progress-step-"]`).evaluateAll((elements) => {
+//       //     return elements.findIndex((el) => el.getAttribute('data-active') === 'true');
+//       //   });
+//       //   const doneTabIndex = await page.locator(`a[id^="progress-step-"]`).evaluateAll((elements) => {
+//       //     return elements.reverse().findIndex((el) => el.getAttribute('data-done') === 'true');
+//       //   });
+
+//       //   // Update the tabs if they are not in the expected state
+//       //   if (activeTabIndex === 5 || doneTabIndex === 4) {
+//       //     return true
+//       //   }
+//       //   else{
+//       //     return false
+//       //   }
+//       // }
+//       // else if(text==="saveTemplate") {
+//       //   console.log("else if last");
+
+//       //   return true
+//       // }
+//       // else{
+//       //   console.log("else");
+//       //   return false
+//       // }
+//       console.log(buttonType, buttonText, "buttonType buttonText");
+
+//       // Update the tab states
+//       // if (buttonText === "Proceed to mockups") {
+//       //   await page.locator(`a[id="progress-step-3"]`).add("data-active", "true");
+//       //   await page.locator(`a[id="progress-step-2"]`).add("data-done", "true");
+//       // } else if (buttonType === "mockup-selection") {
+//       //   await page.locator(`a[id="progress-step-4"]`).add("data-active", "true");
+//       //   await page.locator(`a[id="progress-step-3"]`).add("data-done", "true");
+//       // } else if (buttonType === "detail-continue") {
+//       //   await page.locator(`a[id="progress-step-5"]`).add("data-active", "true");
+//       //   await page.locator(`a[id="progress-step-4"]`).add("data-done", "true");
+//       // }
+
+//       // Verify the tab states
+//       const activeTabs = await page.$$eval(`a[id^="progress-step-"][data-active="true"]`, (elements) => elements.length);
+//       const doneTabs = await page.$$eval(`a[id^="progress-step-"][data-done="true"]`, (elements) => elements.length);
+
+//       console.log(activeTabs, doneTabs, "activeTabs, doneTabs");
+
+//       if (buttonText === "Proceed to mockups") {
+//         return activeTabs === 1 && doneTabs === 1;
+//       } else if (buttonType === "mockup-selection") {
+//         return activeTabs === 1 && doneTabs === 1;
+//       } else if (buttonType === "detail-continue") {
+//         return activeTabs === 1 && doneTabs === 1;
+//       } else if (buttonType === "savetemplate") {
+//         return true;
+//       } else {
+//         return false;
+//       }
+//     }
+//     ,10,buttonType
+//   );
+// }
 async function handleMockupSelection(page, styleType = "ghost") {
   try {
     await clickChooseMockupsButton(page);
@@ -2543,7 +2748,20 @@ async function handleMockupSelection(page, styleType = "ghost") {
     await wait(2000);
     await selectMockupFormat(page);
     await wait(1000);
-    await handleModalButton(page, "continue");
+    await retry(
+      async()=>{
+        // await handleModalButton(page, "proceed");
+        await handleModalButton(page, "mockup-selection");
+        await wait(1000);
+      },
+      async()=>{
+        console.log("proceed retry");
+        
+        return await page.evaluate(() => {
+          return document.querySelector('.product-push-details-mke') !== null && document.querySelector('.mockup-type-picker-panel') === null;
+      });
+      }
+    )
     return true;
   } catch (error) {
     console.error("Error in handleMockupSelection:", error);
@@ -2750,14 +2968,14 @@ async function selectMockupFormat(page) {
       console.log("Attempting to select PNG format...");
   
       // Wait for the radio button to be present
-      await page.waitForSelector("#is-png", {
+      await page.waitForSelector("#is-jpg", {
         visible: true,
         timeout: 5000,
       });
   
       // Scroll the radio button into view if needed
       await page.evaluate(() => {
-        const radio = document.querySelector("#is-png");
+        const radio = document.querySelector("#is-jpg");
         if (radio) {
           radio.scrollIntoView({
             behavior: "smooth",
@@ -2771,19 +2989,19 @@ async function selectMockupFormat(page) {
       // Try to click the radio button using multiple methods
       try {
         // Method 1: Direct click
-        await page.click("#is-png");
+        await page.click("#is-jpg");
       } catch (clickError) {
         console.log("Direct click failed, trying alternative methods");
         try {
           // Method 2: Evaluate click
           await page.evaluate(() => {
-            const radio = document.querySelector("#is-png");
+            const radio = document.querySelector("#is-jpg");
             if (radio) radio.click();
           });
         } catch (evalError) {
           // Method 3: Set checked property directly
           await page.evaluate(() => {
-            const radio = document.querySelector("#is-png");
+            const radio = document.querySelector("#is-jpg");
             if (radio) {
               radio.checked = true;
               radio.dispatchEvent(
@@ -2798,7 +3016,7 @@ async function selectMockupFormat(page) {
   
       // Verify selection
       const isSelected = await page.evaluate(() => {
-        const radio = document.querySelector("#is-png");
+        const radio = document.querySelector("#is-jpg");
         return radio && radio.checked;
       });
   
@@ -3067,8 +3285,22 @@ async function handleProductDetails(page,title,category) {
   try {
     await inputProductTitle(page, title,category);
     // Additional mockup selection logic will be added here
-    await wait(2000); // Wait for mockup grid to fully load
-    await handleModalButton(page, "continue");
+    await wait(2000);
+     // Wait for mockup grid to fully load
+     await retry(
+      async()=>{
+        // await handleModalButton(page, "proceed");
+        await handleModalButton(page, "detail-continue");
+        await wait(1000);
+      },
+      async()=>{
+        console.log("proceed retry");
+        
+        return await page.evaluate(() => {
+          return document.querySelector('.product-push-pricing-mke') !== null && document.querySelector('.product-push-details-mke') === null;
+      });
+      }
+    )
     await wait(2000);
     await handleProductPricing(page);
 
@@ -3080,7 +3312,22 @@ async function handleProductDetails(page,title,category) {
 }
 async function handleProductPricing(page) {
   try {
-    await handleModalButton(page, "submit");
+    await retry(
+      async()=>{
+        // await handleModalButton(page, "proceed");
+        // await handleModalButton(page, "mockup-selection");
+      await handleModalButton(page, "submit");
+        await wait(1000);
+      },
+      async()=>{
+        console.log("proceed retry");
+        
+        return await page.evaluate(() => {
+          return document.querySelector('.snackbar--success') !== null && document.querySelector('.product-push-details-mke') === null;
+      });
+      }
+    )
+    // await handleModalButton(page, "submit");
     return true;
   } catch (error) {
     console.error("Error in handleProductDetails:", error);
@@ -3355,430 +3602,6 @@ async function deleteTemplateModal(page, buttonText) {
   }
 }
 
-// Product Deletion
-async function clickModalDeleteButton(page) {
-    try {
-      // Wait for modal to be fully visible
-    //   await page.waitForSelector('.modal-footer', {
-    //     visible: true,
-    //     timeout: 5000
-    //   });
-      await wait(3000); // Wait for modal animation
-  
-      // Define comprehensive button selectors
-      const deleteButtonSelectors = [
-        // Exact match based on your HTML
-        'a.pf-btn.pf-btn-primary.pf-mr-12',
-        // More general selectors
-        ".modal-footer .pf-btn",
-        ".modal-footer .pf-btn-primary",
-        ".modal-footer button",
-        'button[data-test*="delete-btn"]',
-        // XPath selectors for text-based matching
-        '//a[text()="Delete" and contains(@class, "pf-btn-primary")]',
-        '//button[text()="Delete"]'
-      ];
-  
-      for (const selector of deleteButtonSelectors) {
-        try {
-          console.log(`Trying selector: ${selector}`);
-  
-          // Handle XPath selectors
-          const elements = selector.startsWith("//")
-            ? await page.$(selector)
-            : await page.$$(selector);
-  
-          for (const element of elements) {
-            try {
-              // Get text content based on selector type
-              const elementText = selector.startsWith("//")
-                ? await page.evaluate((el) => el.textContent.trim(), element)
-                : await element.evaluate((el) => {
-                    const textContent = el.textContent.trim();
-                    return textContent.replace(/\s+/g, " ").trim();
-                  });
-  
-              console.log(`Found button with text: "${elementText}"`);
-  
-              if (elementText.toLowerCase().includes("delete")) {
-                console.log(`Found matching delete button`);
-  
-                // Check if button is visible and clickable
-                const isVisible = await page.evaluate((el) => {
-                  const rect = el.getBoundingClientRect();
-                  const style = window.getComputedStyle(el);
-                  return (
-                    rect.width > 0 &&
-                    rect.height > 0 &&
-                    style.visibility !== "hidden" &&
-                    style.display !== "none" &&
-                    !el.disabled
-                  );
-                }, element);
-  
-                if (!isVisible) {
-                  console.log(
-                    "Button is not visible or clickable, continuing search..."
-                  );
-                  continue;
-                }
-  
-                // Scroll into view if needed
-                await page.evaluate((el) => {
-                  el.scrollIntoView({
-                    behavior: "smooth",
-                    block: "center",
-                  });
-                }, element);
-                await wait(500);
-  
-                // Wait for button to be enabled
-                await page.waitForFunction(
-                  (button) => !button.disabled,
-                  {},
-                  element
-                );
-  
-                // Try multiple click methods
-                try {
-                  // Method 1: Direct click with wait
-                  await element.click({
-                    delay: 100,
-                  });
-                  console.log("Delete button clicked successfully (Method 1)");
-                  return true;
-                } catch (clickError1) {
-                  try {
-                    // Method 2: Click using page.evaluate
-                    await page.evaluate((el) => {
-                      el.click();
-                    }, element);
-                    console.log("Delete button clicked successfully (Method 2)");
-                    return true;
-                  } catch (clickError2) {
-                    try {
-                      // Method 3: Click using JavaScript event
-                      await page.evaluate((el) => {
-                        const clickEvent = new MouseEvent("click", {
-                          view: window,
-                          bubbles: true,
-                          cancelable: true,
-                        });
-                        el.dispatchEvent(clickEvent);
-                      }, element);
-                      console.log("Delete button clicked successfully (Method 3)");
-                      return true;
-                    } catch (clickError3) {
-                      // Method 4: Try clicking by position
-                      const box = await element.boundingBox();
-                      if (box) {
-                        await page.mouse.click(
-                          box.x + box.width / 2,
-                          box.y + box.height / 2
-                        );
-                        console.log("Delete button clicked successfully (Method 4)");
-                        return true;
-                      }
-                    }
-                  }
-                }
-              }
-            } catch (elementError) {
-              console.log("Error processing element:", elementError);
-              continue;
-            }
-          }
-        } catch (selectorError) {
-          console.log("Error with selector:", selectorError);
-          continue;
-        }
-      }
-  
-      console.log("Delete button not found in modal");
-      return false;
-    } catch (error) {
-      console.error("Error in clickModalDeleteButton:", error);
-      throw error;
-    }
-  }
-async function deleteProduct(page, templateTitle) {
-    try {
-      // Wait for the product list to be visible
-      await page.waitForSelector(SELECTORS.PRODUCT.LIST, {
-        visible: true,
-      });
-      await wait(4000);
-  
-      const productRows = await page.$$(SELECTORS.PRODUCT.ROW);
-      console.log(`Found ${productRows.length} product rows`);
-      const ProductTableHeader = await page.$(SELECTORS.PRODUCT.HEADER);
-  
-      await page.evaluate((el) => {
-        el.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-      }, ProductTableHeader);
-      await wait(2000);
-  
-      for (const row of productRows) {
-        try {
-          const titleHandle = await row.$(SELECTORS.PRODUCT.TITLE);
-          if (!titleHandle) {
-            console.log("Title handle not found for row");
-            continue;
-          }
-  
-          const productTitle = await page.evaluate(
-            (el) => el.textContent.trim(),
-            titleHandle
-          );
-          console.log(productTitle, "product Title ");
-          if (productTitle !== templateTitle) {
-            console.log(`Title mismatch: ${productTitle}`);
-            continue;
-          }
-  
-          // Scroll the row into view and wait for any animations to complete
-          await page.evaluate((el) => {
-            el.scrollIntoView({
-              behavior: "smooth",
-              block: "center",
-            });
-          }, row);
-          await wait(1000); // Wait for scroll to complete
-  
-          // Ensure checkbox is visible and clickable
-          // await selectCheckbox(page,"")
-          const checkbox = await row.$(SELECTORS.PRODUCT.CHECKBOX);
-          if (!checkbox) {
-            console.log("Checkbox not found for matching product");
-            continue;
-          }
-  
-          // Check if checkbox is visible and enabled
-          const isClickable = await page.evaluate((el) => {
-            const style = window.getComputedStyle(el);
-            const rect = el.getBoundingClientRect();
-            return (
-              style.display !== "none" &&
-              style.visibility !== "hidden" &&
-              style.opacity !== "0" &&
-              rect.width > 0 &&
-              rect.height > 0 &&
-              !el.disabled
-            );
-          }, checkbox);
-  
-          if (!isClickable) {
-            console.log("Checkbox is not clickable");
-            continue;
-          }
-  
-          // Try multiple click methods
-          try {
-            // Method 1: Direct click
-            await checkbox.click({
-              delay: 100,
-            });
-          } catch (clickError) {
-            console.log("Direct click failed, trying alternative methods");
-            try {
-              // Method 2: Click using page.evaluate
-              await page.evaluate((el) => el.click(), checkbox);
-            } catch (evalClickError) {
-              // Method 3: JavaScript click with position
-              await page.evaluate((el) => {
-                const rect = el.getBoundingClientRect();
-                const event = new MouseEvent("click", {
-                  view: window,
-                  bubbles: true,
-                  cancelable: true,
-                  clientX: rect.left + rect.width / 2,
-                  clientY: rect.top + rect.height / 2,
-                });
-                el.dispatchEvent(event);
-              }, checkbox);
-            }
-          }
-  
-          // Verify if checkbox was actually selected
-          const isChecked = await page.evaluate((el) => el.checked, checkbox);
-          if (!isChecked) {
-            console.log("Checkbox click did not register, retrying...");
-            await wait(500);
-            await checkbox.click({
-              delay: 100,
-            });
-  
-            // Final check
-            const finalCheck = await page.evaluate((el) => el.checked, checkbox);
-            if (!finalCheck) {
-              console.log("Failed to select checkbox after retry");
-              continue;
-            }
-          }
-  
-          console.log(`Successfully selected product: ${templateTitle}`);
-          try {
-            // Wait for the save button to be visible
-            await page.waitForSelector("#delete", {
-              visible: true,
-            });
-  
-            // Scroll the button into view if needed
-            await page.evaluate(() => {
-              const button = document.querySelector("#delete");
-              if (button) {
-                button.scrollIntoView({
-                  behavior: "smooth",
-                  block: "center",
-                });
-              }
-            });
-  
-            await wait(1000); // Wait for any animations
-  
-            // Try clicking the button
-            try {
-              // First attempt: direct click
-              await page.click("#delete");
-            } catch (buttonClickError) {
-              console.log(
-                "Direct button click failed, trying alternative method"
-              );
-              // Second attempt: evaluate click
-              await page.evaluate(() => {
-                const button = document.querySelector("#delete");
-                if (button) button.click();
-              });
-            }
-  
-            console.log("Successfully clicked Save as templates button");
-            // return true;
-            // Wait for modal to appear and be visible
-            // await wait(5000);
-            await wait(2000);
-            console.log("clucking checkbox");
-  
-            // Wait for and click the confirmation checkbox
-            const checkboxSelector = '.delete-modal-label input[type="checkbox"]';
-            await page.waitForSelector(checkboxSelector, {
-              visible: true,
-              timeout: 5000,
-            });
-            console.log("visisble checkbox");
-  
-            // Try multiple methods to check the checkbox
-            try {
-              // Method 1: Direct click on checkbox
-              await page.click(checkboxSelector);
-              console.log("clicked checkbox");
-            } catch (error) {
-              console.log(
-                "Direct checkbox click failed, trying alternative methods"
-              );
-              try {
-                // Method 2: Click using evaluate
-                await page.evaluate((selector) => {
-                  const checkbox = document.querySelector(selector);
-                  if (checkbox) {
-                    checkbox.checked = true;
-                    checkbox.dispatchEvent(
-                      new Event("change", {
-                        bubbles: true,
-                      })
-                    );
-                  }
-                }, checkboxSelector);
-              } catch (evalError) {
-                // Method 3: Click on the label instead
-                await page.click(".delete-modal-label");
-              }
-            }
-  
-            // Verify checkbox is checked
-            const isChecked = await page.evaluate((selector) => {
-              const checkbox = document.querySelector(selector);
-              return checkbox && checkbox.checked;
-            }, checkboxSelector);
-  
-            if (!isChecked) {
-              console.log("Failed to check the confirmation checkbox");
-              return false;
-            }
-  
-            console.log("Successfully checked the confirmation checkbox");
-            await wait(1000);
-            // Wait for the Delete button to become enabled (no longer has 'disabled' class)
-            await page.waitForFunction(
-              () => {
-                const deleteButton = document.querySelector(
-                  ".modal-footer .pf-btn-primary"
-                );
-                return (
-                  deleteButton && !deleteButton.classList.contains("disabled")
-                );
-              },
-              {
-                timeout: 5000,
-              }
-            );
-            console.log("button is enabled");
-  
-            // Click the Delete button
-            // await page.click('.modal-footer .pf-btn-primary');
-  
-            // Wait for potential loading state or confirmation
-            // await wait(2000);
-            // const modalDelButtonSelector = ".modal-footer a.pf-btn.pf-btn-primary.pf-mr-12";
-            // const modalDelButtonSelector = `.modal-footer .pf-btn:contains("Delete")`;
-            // // const modalDelButton = await page.waitForSelector(modalDelButtonSelector, {
-            //     //   visible: true,
-            //     //   timeout: 5000,
-            //     // });
-                
-            //     try {
-            //         // First attempt: direct click
-            //         const modalDelButton = await ensureClickable(page, modalDelButtonSelector);
-            //         await modalDelButton.click();
-            //         await wait(1000);
-            // //   await modalDelButton.click();
-            // } catch (modalButtonClickError) {
-            //   console.log(
-            //     "Direct modal button click failed, trying alternative method"
-            //   );
-            //   // Second attempt: evaluate click
-            //   await page.evaluate(() => {
-            //     const button = document.querySelector(
-            //      `.modal-footer .pf-btn:contains("Delete")`
-            //     );
-            //     if (button) button.click();
-            //   });
-            // }
-            await clickModalDeleteButton(page);
-            console.log("Successfully initiated product deletion");
-            return true;
-          } catch (buttonError) {
-            console.error(
-              "Error clicking Save as templates button:",
-              buttonError
-            );
-            break;
-            // throw buttonError;
-          }
-        } catch (rowError) {
-          console.error("Error processing row:", rowError);
-          continue;
-        }
-      }
-      console.log(`Product "${templateTitle}" not found in list`);
-      return false;
-    } catch (error) {
-      console.error("Error in selectProduct:", error);
-      throw error;
-    }
-}
 
 
 async function test(  email,
@@ -3792,10 +3615,10 @@ async function test(  email,
 
   try {
     await login(page, email, password);
-    
-    // await wait(2000);
-    // await selectProduct(page, templateTitle);
+    // await wait(200000)
     await wait(2000);
+    // await selectProduct(page, templateTitle);
+    // await wait(2000);
     await navigateToCatalog(page, catalogueName,imageId);
     // await wait(2000);
     await wait(3000);
@@ -3803,7 +3626,7 @@ async function test(  email,
     await wait(1000);
     console.log("template actions");
     
-    await handleTemplateActions(page, templateName);
+    await handleTemplateActions(page, templateName, catalogueName,imageId);
     await wait(2000);
     await handleMockupSelection(page, "flat");
     await wait(2000);

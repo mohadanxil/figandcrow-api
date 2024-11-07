@@ -1083,7 +1083,7 @@ async function navigateToCatalog(page, searchTerm, imageId) {
           // });
           // await selectAllColors(page);
           await selectColors(page,[])
-          await selectAllSizes(page);
+          // await selectAllSizes(page);
           await clickUploadButton(
             page,
             ".product-push__droparea button",
