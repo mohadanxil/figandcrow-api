@@ -17,11 +17,11 @@ const SELECTORS = {
   },
   NAVIGATION: {
     STORES: 'li.sidebar__item:has(a[aria-label="Stores"]) a',
-    // CATALOG: 'a.sidebar__link[href="/dashboard/custom-products"]',
-    CATALOG: 'li.sidebar__item:has(a[aria-label="Product catalog"]) a',
-    // PRODUCT_TEMPLATES: 'a.sidebar__link[href="/dashboard/product-templates"]',
-    PRODUCT_TEMPLATES:
-      'li.sidebar__item:has(a[aria-label="Product templates"]) a',
+    CATALOG: 'a.sidebar__link[href="/dashboard/custom-products"]',
+    // CATALOG: 'li.sidebar__item:has(a[aria-label="Product catalog"]) a',
+    PRODUCT_TEMPLATES: 'a.sidebar__link[href="/dashboard/product-templates"]',
+    // PRODUCT_TEMPLATES:
+    //   'li.sidebar__item:has(a[aria-label="Product templates"]) a',
     // PRODUCT_TEMPLATES:
     //   'li.sidebar__item:has(a[aria-label="Product templates"]) a',
   },
@@ -45,8 +45,8 @@ const SELECTORS = {
     GRID: ".product-template-items--grid",
     GRID_ITEM: ".product-template-items--grid .product-template-item",
     LINK: "a.product-template-link",
-    // SIDEBAR_LINK: 'a.sidebar__link[href="/dashboard/product-templates"]',
-    SIDEBAR_LINK: 'li.sidebar__item:has(a[aria-label="Product templates"]) a',
+    SIDEBAR_LINK: 'a.sidebar__link[href="/dashboard/product-templates"]',
+    // SIDEBAR_LINK: 'li.sidebar__item:has(a[aria-label="Product templates"]) a',
     ADD_TO_STORE: 'button[data-test="product-templates-item-add-to-store"]',
     IMAGE:
       ".product-template-image.pf-rounded.pf-position-relative.pf-cursor-pointer",
@@ -1935,7 +1935,7 @@ async function findAndClickWixStore(page) {
                 console.log('Checking store background image:', backgroundImageUrl);
                 
                 // Check if the URL contains 'wix'
-                if (backgroundImageUrl.toLowerCase().includes('wix')) {
+                if (backgroundImageUrl.toLowerCase().includes('branding')) {
                     console.log('Found Wix store, attempting to click...');
                     
                     // Try multiple click methods with retry
